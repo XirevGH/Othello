@@ -1,5 +1,3 @@
-package Algoritmdesigntekniker;
-
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.MouseAdapter;
@@ -8,7 +6,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class OthelloGUI extends JFrame {
-    // Constants placed at the very top to prevent illegal forward reference compiler errors
     private final int BLACK = 1;
     private final int WHITE = 2;
     private final int EMPTY = 0; 
@@ -23,6 +20,7 @@ public class OthelloGUI extends JFrame {
     
     private JRadioButton bitboardRadio;
     private JRadioButton ooRadio;
+    private JRadioButton primitive2dRadio; 
     private JRadioButton nestedRadio;
     private JCheckBox visualizerCheckbox;
     private JCheckBox alphaBetaCheckbox;
@@ -34,32 +32,25 @@ public class OthelloGUI extends JFrame {
     private SwingWorker<Integer, Void> aiWorker; 
     private boolean aiSuspended = false; 
 
-    // Selected engine type tracking (Renamed for structural precision)
-    private enum EngineType { BITBOARD, FLAT_ARRAY, NESTED_OBJECT }
+    private enum EngineType { BITBOARD, FLAT_ARRAY, PRIMITIVE_2D, NESTED_OBJECT }
     private EngineType selectedEngine = EngineType.BITBOARD;
 
-    // Remembers the user's last manual Move Ordering preference
     private boolean lastMoveOrderingPreference = true;
-
     private long aiStartTime = 0; 
 
-    // Visualizer Mode Tracking Variables
     private boolean visualizerMode = false;
     private int[][] debugHighlights = new int[8][8]; 
     private int currentPlayer = BLACK; 
     private int aiDepth = 7; 
-    private volatile boolean isProcessing = false; // volatile protects thread visibility
+    private volatile boolean isProcessing = false; 
 
-    // Header buttons promoted to class fields for state locking
     private JButton restartBtn;
     private JButton loadRecordBtn;
     private JButton benchmarkBtn;
 
-    // Benchmark Thread and Worker Tracking
     private Thread activeBenchmarkThread;
     private SwingWorker<Integer, Void> activeBenchmarkWorker;
 
-    // VCR Control Components
     private JPanel row3; 
     private JButton prevButton;
     private JButton playPauseButton;
@@ -70,7 +61,6 @@ public class OthelloGUI extends JFrame {
     private Timer autoPlayTimer;
     private int visualizerSpeedMs = 500; 
 
-    // State History Storage
     private static class VizState {
         int r, c, dir, step;
         boolean[][] persistentValids;
@@ -78,11 +68,10 @@ public class OthelloGUI extends JFrame {
         int[][] highlights;
         String explanation;
         
-        // Advanced graphic overlay metrics
-        List<int[]> arrows = new ArrayList<>();   // Stores [startRow, startCol, endRow, endCol, colorType]
-        List<int[]> wallHits = new ArrayList<>(); // Stores [wallRow, wallCol, edgeRow, edgeCol, offscreenRow, offscreenCol]
-        String[][] markers = new String[8][8];    // Stores "X", "✓" or null
-        String[][] tileTexts = new String[8][8];  // Dictates the exact text label on each tile
+        List<int[]> arrows = new ArrayList<>();   
+        List<int[]> wallHits = new ArrayList<>(); 
+        String[][] markers = new String[8][8];    
+        String[][] tileTexts = new String[8][8];  
         
         VizState(int r, int c, int dir, int step, boolean[][] valids, boolean[][] invalids, int[][] highlights, String explanation) {
             this.r = r;
@@ -104,7 +93,6 @@ public class OthelloGUI extends JFrame {
             this.explanation = explanation;
         }
 
-        // Deep-copy setters to guarantee isolated framing states
         public void setTileTexts(String[][] src) {
             for (int i = 0; i < 8; i++) {
                 System.arraycopy(src[i], 0, this.tileTexts[i], 0, 8);
@@ -120,7 +108,6 @@ public class OthelloGUI extends JFrame {
     private List<VizState> vizHistory = new ArrayList<>();
     private int historyIndex = -1;
 
-    // Clockwise directions starting from East
     private static final int[] DR = {0, 1, 1, 1, 0, -1, -1, -1};
     private static final int[] DC = {1, 1, 0, -1, -1, -1, 0, 1};
     private static final String[] DIR_NAMES = {
@@ -130,7 +117,6 @@ public class OthelloGUI extends JFrame {
         "→", "↘", "↓", "↙", "←", "↖", "↑", "↗"
     };
 
-    // Standard vector icons custom drawn directly on components
     private static class PlayIcon implements Icon {
         private final int width;
         private final int height;
@@ -192,7 +178,6 @@ public class OthelloGUI extends JFrame {
         createBoard();
         createStatusBar();
 
-        // Apply initial configurations cleanly
         boolean abSelected = alphaBetaCheckbox.isSelected();
         moveOrderingCheckbox.setEnabled(abSelected);
         if (abSelected) {
@@ -205,7 +190,7 @@ public class OthelloGUI extends JFrame {
         game.setUseMoveOrdering(abSelected && lastMoveOrderingPreference);
 
         pack();
-        setSize(950, 740); 
+        setSize(1050, 740); 
         setLocationRelativeTo(null); 
         updateStatus();
     }
@@ -219,15 +204,12 @@ public class OthelloGUI extends JFrame {
             System.arraycopy(state.highlights[r], 0, debugHighlights[r], 0, 8);
         }
         
-        // Appends active directional Unicode arrows to status explanations
         String arrowSym = "";
         if (state.dir >= 0 && state.dir < 8) {
             arrowSym = " " + DIR_ARROWS[state.dir];
         }
         
         aiInfoLabel.setText(String.format("Step %d/%d: %s%s", historyIndex + 1, vizHistory.size(), state.explanation, arrowSym));
-        
-        // Prev/Next buttons are locked if autoplay is running
         prevButton.setEnabled(!isAutoPlaying && historyIndex > 0);
         nextButton.setEnabled(!isAutoPlaying && historyIndex < vizHistory.size() - 1);
         
@@ -260,8 +242,7 @@ public class OthelloGUI extends JFrame {
 
     private void startAutoPlay() {
         isAutoPlaying = true;
-        playPauseButton.setIcon(new StopIcon(14, 14, new Color(220, 20, 60))); // Red Stop icon
-        
+        playPauseButton.setIcon(new StopIcon(14, 14, new Color(220, 20, 60))); 
         prevButton.setEnabled(false);
         nextButton.setEnabled(false);
         
@@ -279,13 +260,12 @@ public class OthelloGUI extends JFrame {
 
     private void stopAutoPlay() {
         isAutoPlaying = false;
-        playPauseButton.setIcon(new PlayIcon(14, 14, new Color(34, 139, 34))); // Green Play icon
+        playPauseButton.setIcon(new PlayIcon(14, 14, new Color(34, 139, 34))); 
         
         if (autoPlayTimer != null) {
             autoPlayTimer.stop();
         }
         
-        // Re-evaluate boundary conditions for step buttons
         prevButton.setEnabled(historyIndex > 0);
         nextButton.setEnabled(historyIndex < vizHistory.size() - 1);
     }
@@ -309,7 +289,6 @@ public class OthelloGUI extends JFrame {
         benchmarkBtn = new JButton("Run Benchmark");
         styleHeaderButton(benchmarkBtn);
         benchmarkBtn.addActionListener(e -> {
-            // If currently executing, act as a Stop button
             if (isProcessing && benchmarkBtn.getText().equals("Stop Benchmark")) {
                 stopAutomatedBenchmark();
             } else {
@@ -363,7 +342,7 @@ public class OthelloGUI extends JFrame {
         visualizerCheckbox.setCursor(new Cursor(Cursor.HAND_CURSOR));
         visualizerCheckbox.addActionListener(e -> {
             if (isProcessing) {
-                visualizerCheckbox.setSelected(visualizerMode); // Revert selection if simulation is underway
+                visualizerCheckbox.setSelected(visualizerMode); 
                 Toolkit.getDefaultToolkit().beep();
                 return;
             }
@@ -378,19 +357,20 @@ public class OthelloGUI extends JFrame {
                 alphaBetaCheckbox.setEnabled(false);
                 moveOrderingCheckbox.setEnabled(false);
                 
-                // Route to the new history generators depending on your active engine selection
                 if (selectedEngine == EngineType.BITBOARD) {
                     generateBitboardHistory();
                 } else if (selectedEngine == EngineType.FLAT_ARRAY) {
-                    generateFlatArrayOptimizedHistory(); // Plays our new optimized segment sweep
+                    generateFlatArrayOptimizedHistory(); 
+                } else if (selectedEngine == EngineType.PRIMITIVE_2D) {
+                    generateOOHistoryFrontier(); 
                 } else {
-                    generateOOHistory(); // Plays the traditional 8-direction neighbor search
+                    generateOOHistoryPrimitive(); 
                 }
 
                 row3.setVisible(true);
                 historyIndex = 0;
                 applyHistoryFrame();
-                stopAutoPlay(); // Start visualizer in a stopped (paused) state
+                stopAutoPlay(); 
             }
             else {
                 stopAutoPlay();
@@ -426,7 +406,7 @@ public class OthelloGUI extends JFrame {
         alphaBetaCheckbox.setCursor(new Cursor(Cursor.HAND_CURSOR));
         alphaBetaCheckbox.addActionListener(e -> {
             if (isProcessing) {
-                alphaBetaCheckbox.setSelected(!alphaBetaCheckbox.isSelected()); // Revert state
+                alphaBetaCheckbox.setSelected(!alphaBetaCheckbox.isSelected()); 
                 Toolkit.getDefaultToolkit().beep();
                 return;
             }
@@ -449,14 +429,13 @@ public class OthelloGUI extends JFrame {
         moveOrderingCheckbox.setCursor(new Cursor(Cursor.HAND_CURSOR));
         moveOrderingCheckbox.addActionListener(e -> {
             if (isProcessing) {
-                moveOrderingCheckbox.setSelected(!moveOrderingCheckbox.isSelected()); // Revert state
+                moveOrderingCheckbox.setSelected(!moveOrderingCheckbox.isSelected()); 
                 Toolkit.getDefaultToolkit().beep();
                 return;
             }
             
             boolean selected = moveOrderingCheckbox.isSelected();
             lastMoveOrderingPreference = selected;
-            
             game.setUseMoveOrdering(selected);
         });
 
@@ -495,6 +474,22 @@ public class OthelloGUI extends JFrame {
             }
         });
 
+        primitive2dRadio = new JRadioButton("2D Primitive", false); 
+        primitive2dRadio.setFont(new Font("Arial", Font.PLAIN, 12));
+        primitive2dRadio.setOpaque(false);
+        primitive2dRadio.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        primitive2dRadio.addActionListener(e -> {
+            if (isProcessing) {
+                primitive2dRadio.setSelected(selectedEngine == EngineType.PRIMITIVE_2D);
+                Toolkit.getDefaultToolkit().beep();
+                return;
+            }
+            if (selectedEngine != EngineType.PRIMITIVE_2D) {
+                selectedEngine = EngineType.PRIMITIVE_2D;
+                switchEngine(); 
+            }
+        });
+
         nestedRadio = new JRadioButton("2D Cell Objects", false); 
         nestedRadio.setFont(new Font("Arial", Font.PLAIN, 12));
         nestedRadio.setOpaque(false);
@@ -514,6 +509,7 @@ public class OthelloGUI extends JFrame {
         ButtonGroup engineGroup = new ButtonGroup();
         engineGroup.add(bitboardRadio);
         engineGroup.add(ooRadio);
+        engineGroup.add(primitive2dRadio);
         engineGroup.add(nestedRadio);
 
         enginePanel.add(visualizerCheckbox);
@@ -523,12 +519,12 @@ public class OthelloGUI extends JFrame {
         enginePanel.add(engineLabel);
         enginePanel.add(bitboardRadio);
         enginePanel.add(ooRadio);
+        enginePanel.add(primitive2dRadio);
         enginePanel.add(nestedRadio);
 
         headerPanel.add(actionPanel, BorderLayout.WEST);
         headerPanel.add(enginePanel, BorderLayout.EAST);
 
-        // NEW: Adaptive responsive header layout observer
         headerPanel.addComponentListener(new java.awt.event.ComponentAdapter() {
             @Override
             public void componentResized(java.awt.event.ComponentEvent e) {
@@ -560,7 +556,7 @@ public class OthelloGUI extends JFrame {
 
     private void styleHeaderButton(JButton btn) {
         btn.setFont(new Font("Arial", Font.BOLD, 12));
-        btn.setFocusPainted(false); // Removes focus ring
+        btn.setFocusPainted(false); 
         btn.setCursor(new Cursor(Cursor.HAND_CURSOR));
         btn.setBackground(Color.WHITE);
         btn.setBorder(BorderFactory.createCompoundBorder(
@@ -587,16 +583,16 @@ public class OthelloGUI extends JFrame {
         historyIndex = -1;
         clearHighlights();
 
-        // 1. Reset Board to fresh engine
         if (selectedEngine == EngineType.BITBOARD) {
             game = new OthelloBitboard(); 
         } else if (selectedEngine == EngineType.FLAT_ARRAY) {
             game = new OthelloFlatArray(); 
+        } else if (selectedEngine == EngineType.PRIMITIVE_2D) {
+            game = new OthelloPrimitive(); 
         } else {
             game = new OthelloCellObjects(); 
         }
 
-        // 2. Play the 26-move Takizawa record sequence
         String[] moves = {
             "F5", "D6", "C4", "F3", "C5", "B4", "B3", "E6", "C6", "G5", "F6", "C7", "C3", "D2", "C2", "B2", "F4", "G4", "G3", "G7", "G6", "E7", "D3", "G2", "H3", "B6"
         };
@@ -614,36 +610,38 @@ public class OthelloGUI extends JFrame {
             }
         }
 
-        currentPlayer = activePlayer; // Turns pass correctly (Black's turn to move)
+        currentPlayer = activePlayer; 
         isProcessing = false;
 
-        // 3. Re-initialize visualizer or active play modes
         if (visualizerMode) {
             aiSuspended = true;
             stopAIButton.setEnabled(false);
-            stopAIButton.setVisible(false); // Hide during non-game visualizer runs
+            stopAIButton.setVisible(false); 
             if (depthSlider != null) depthSlider.setEnabled(false);
             
             if (selectedEngine == EngineType.BITBOARD) {
-                    generateBitboardHistory();
-                } else if (selectedEngine == EngineType.FLAT_ARRAY) {
-                    generateFlatArrayOptimizedHistory(); // New segment-scan visualizer
-                } else {
-                    generateOOHistory();
-                }
+                generateBitboardHistory();
+            } else if (selectedEngine == EngineType.FLAT_ARRAY) {
+                generateFlatArrayOptimizedHistory(); 
+            } else if (selectedEngine == EngineType.PRIMITIVE_2D) {
+                generateOOHistoryFrontier();
+            } else {
+                generateOOHistoryPrimitive();
+            }
             
             historyIndex = 0;
             applyHistoryFrame();
-            stopAutoPlay(); // Start visualizer in a stopped (paused) state
+            stopAutoPlay(); 
             row3.setVisible(true);
         } else {
             aiSuspended = false; 
             aiInfoLabel.setText("Takizawa Record-33 loaded. Black's turn.");
             stopAIButton.setEnabled(false);
-            stopAIButton.setVisible(false); // Hide by default
+            stopAIButton.setVisible(false); 
             if (depthSlider != null) depthSlider.setEnabled(true);
             if (bitboardRadio != null) bitboardRadio.setEnabled(true);
             if (ooRadio != null) ooRadio.setEnabled(true);
+            if (primitive2dRadio != null) primitive2dRadio.setEnabled(true);
             if (nestedRadio != null) nestedRadio.setEnabled(true);
             if (visualizerCheckbox != null) visualizerCheckbox.setEnabled(true);
             
@@ -675,8 +673,8 @@ public class OthelloGUI extends JFrame {
         boardPanel = new JPanel(new GridLayout(8, 8)) {
             @Override
             public void paint(Graphics g) {
-                super.paint(g); // Draws background grids and discs first
-                drawVisualizerOverlays((Graphics2D) g); // Overlays visualizer wall arrows cleanly
+                super.paint(g); 
+                drawVisualizerOverlays((Graphics2D) g); 
             }
         };
         boardPanel.setBackground(Color.BLACK);
@@ -711,8 +709,8 @@ public class OthelloGUI extends JFrame {
 
         stopAIButton = new JButton("Stop AI");
         stopAIButton.setEnabled(false);
-        stopAIButton.setVisible(false); // Hidden by default
-        stopAIButton.setFocusPainted(false); // Removes focus ring
+        stopAIButton.setVisible(false); 
+        stopAIButton.setFocusPainted(false); 
         stopAIButton.setFont(new Font("Arial", Font.BOLD, 11));
         stopAIButton.addActionListener(e -> {
             if (aiWorker != null && !aiWorker.isDone()) {
@@ -727,43 +725,59 @@ public class OthelloGUI extends JFrame {
 
         prevButton = new JButton("<< Prev");
         prevButton.setFont(new Font("Arial", Font.BOLD, 11));
-        prevButton.setFocusPainted(false); // Removes focus ring
+        prevButton.setFocusPainted(false); 
         prevButton.addActionListener(e -> {
-            if (isProcessing) return; // MODIFIED: Disable clicks during benchmark
+            if (isProcessing) return; 
             stepBackward();
         });
 
         playPauseButton = new JButton();
-        playPauseButton.setFocusPainted(false); // Removes focus ring
-        playPauseButton.setIcon(new PlayIcon(14, 14, new Color(34, 139, 34))); // Green Play icon
+        playPauseButton.setFocusPainted(false); 
+        playPauseButton.setIcon(new PlayIcon(14, 14, new Color(34, 139, 34))); 
         playPauseButton.setPreferredSize(new Dimension(50, 30));
         playPauseButton.addActionListener(e -> {
-            if (isProcessing) return; // MODIFIED: Disable clicks during benchmark
+            if (isProcessing) return; 
             toggleAutoPlay();
         });
 
         nextButton = new JButton("Next >>");
         nextButton.setFont(new Font("Arial", Font.BOLD, 11));
-        nextButton.setFocusPainted(false); // Removes focus ring
+        nextButton.setFocusPainted(false); 
         nextButton.addActionListener(e -> {
-            if (isProcessing) return; // MODIFIED: Disable clicks during benchmark
+            if (isProcessing) return; 
             stepForward();
         });
 
         JLabel speedLabel = new JLabel("Speed:");
         speedLabel.setFont(new Font("Arial", Font.BOLD, 11));
 
-        // Slider value directly represents steps/frames per second (1 to 40)
-        // 1 = 2000ms delay (Slowest) | 40 = 50ms delay (Fastest, 2x faster than previous 100ms)
-        // Default set to 31, which corresponds to exactly 500ms delay (default speed)
-        speedSlider = new JSlider(JSlider.HORIZONTAL, 1, 40, 31);
+        // Slider ranges from 1 (slowest) to 100 (fastest), default set to 15 (around 1.3 seconds/frame)
+        speedSlider = new JSlider(JSlider.HORIZONTAL, 1, 100, 15);
         speedSlider.setPreferredSize(new Dimension(100, 30));
         speedSlider.setOpaque(false);
         speedSlider.addChangeListener(e -> {
             int val = speedSlider.getValue();
-            visualizerSpeedMs = 2000 - (val - 1) * 50; // Linear mapping
-            if (autoPlayTimer != null && autoPlayTimer.isRunning()) {
+            
+            // 1. Define your target boundary speeds in Frames Per Second (FPS)
+            double minFps = 0.5;  // Slowest: 1 frame every 2 seconds (2000ms delay)
+            double maxFps = 66.0; // Fastest: 66 frames per second (15ms delay)
+            
+            // 2. Map the slider value (1-100) linearly to the target FPS range
+            double fps = minFps + (double)(val - 1) * (maxFps - minFps) / 99.0;
+            
+            // 3. Convert FPS back to millisecond interval (1000ms / FPS)
+            // Math.max guarantees the delay never drops to 0 or becomes negative
+            visualizerSpeedMs = (int) Math.max(1, 1000.0 / fps); 
+            
+            if (autoPlayTimer != null) {
+                // Update the delay properties
                 autoPlayTimer.setDelay(visualizerSpeedMs);
+                autoPlayTimer.setInitialDelay(visualizerSpeedMs);
+                
+                // If currently playing, restart the timer immediately to apply the new speed
+                if (autoPlayTimer.isRunning()) {
+                    autoPlayTimer.restart(); 
+                }
             }
         });
 
@@ -800,6 +814,9 @@ public class OthelloGUI extends JFrame {
         } else if (selectedEngine == EngineType.FLAT_ARRAY) {
             if (ooRadio != null) ooRadio.setSelected(true);
             game = new OthelloFlatArray(); 
+        } else if (selectedEngine == EngineType.PRIMITIVE_2D) {
+            if (primitive2dRadio != null) primitive2dRadio.setSelected(true);
+            game = new OthelloPrimitive(); 
         } else {
             if (nestedRadio != null) nestedRadio.setSelected(true);
             game = new OthelloCellObjects(); 
@@ -817,9 +834,11 @@ public class OthelloGUI extends JFrame {
             if (selectedEngine == EngineType.BITBOARD) {
                 generateBitboardHistory();
             } else if (selectedEngine == EngineType.FLAT_ARRAY) {
-                generateFlatArrayOptimizedHistory(); // Added routing
+                generateFlatArrayOptimizedHistory();
+            } else if (selectedEngine == EngineType.PRIMITIVE_2D) {
+                generateOOHistoryFrontier();
             } else {
-                generateOOHistory();
+                generateOOHistoryPrimitive();
             }
             
             historyIndex = 0;
@@ -830,10 +849,11 @@ public class OthelloGUI extends JFrame {
             aiSuspended = false; 
             aiInfoLabel.setText("");
             stopAIButton.setEnabled(false);
-            stopAIButton.setVisible(false); // Hide by default
+            stopAIButton.setVisible(false); 
             if (depthSlider != null) depthSlider.setEnabled(true);
             if (bitboardRadio != null) bitboardRadio.setEnabled(true);
             if (ooRadio != null) ooRadio.setEnabled(true);
+            if (primitive2dRadio != null) primitive2dRadio.setEnabled(true);
             if (nestedRadio != null) nestedRadio.setEnabled(true);
             if (visualizerCheckbox != null) visualizerCheckbox.setEnabled(true);
             
@@ -871,7 +891,6 @@ public class OthelloGUI extends JFrame {
         }
         stopAutoPlay();
 
-        // 1. Back up the active board layout
         int[][] tempBoard = new int[8][8];
         for (int r = 0; r < 8; r++) {
             for (int c = 0; c < 8; c++) {
@@ -879,13 +898,15 @@ public class OthelloGUI extends JFrame {
             }
         }
 
-        // 2. Instantiate the newly selected engine class
         if (selectedEngine == EngineType.BITBOARD) {
             if (bitboardRadio != null) bitboardRadio.setSelected(true);
             game = new OthelloBitboard(); 
         } else if (selectedEngine == EngineType.FLAT_ARRAY) {
             if (ooRadio != null) ooRadio.setSelected(true);
             game = new OthelloFlatArray(); 
+        } else if (selectedEngine == EngineType.PRIMITIVE_2D) {
+            if (primitive2dRadio != null) primitive2dRadio.setSelected(true);
+            game = new OthelloPrimitive(); 
         } else {
             if (nestedRadio != null) nestedRadio.setSelected(true);
             game = new OthelloCellObjects(); 
@@ -893,14 +914,12 @@ public class OthelloGUI extends JFrame {
         game.setUseAlphaBeta(alphaBetaCheckbox.isSelected());
         game.setUseMoveOrdering(moveOrderingCheckbox.isSelected());
 
-        // 3. Write the backed-up piece configuration into the new engine
         for (int r = 0; r < 8; r++) {
             for (int c = 0; c < 8; c++) {
                 game.setPieceAt(r, c, tempBoard[r][c]);
             }
         }
 
-        // 4. If visualizer is active, regenerate the history frames on the new engine instantly
         if (visualizerMode) {
             aiSuspended = true;
             stopAIButton.setEnabled(false);
@@ -909,9 +928,11 @@ public class OthelloGUI extends JFrame {
             if (selectedEngine == EngineType.BITBOARD) {
                 generateBitboardHistory();
             } else if (selectedEngine == EngineType.FLAT_ARRAY) {
-                generateFlatArrayOptimizedHistory(); // Added routing
+                generateFlatArrayOptimizedHistory(); 
+            } else if (selectedEngine == EngineType.PRIMITIVE_2D) {
+                generateOOHistoryFrontier();
             } else {
-                generateOOHistory();
+                generateOOHistoryPrimitive();
             }
             
             historyIndex = 0;
@@ -926,6 +947,7 @@ public class OthelloGUI extends JFrame {
             if (depthSlider != null) depthSlider.setEnabled(true);
             if (bitboardRadio != null) bitboardRadio.setEnabled(true);
             if (ooRadio != null) ooRadio.setEnabled(true);
+            if (primitive2dRadio != null) primitive2dRadio.setEnabled(true);
             if (nestedRadio != null) nestedRadio.setEnabled(true);
             if (visualizerCheckbox != null) visualizerCheckbox.setEnabled(true);
             
@@ -947,7 +969,6 @@ public class OthelloGUI extends JFrame {
         revalidate();
         repaint();
 
-        // If it was the AI's turn during toggle, resume its search immediately on the new engine
         if (isAITurn()) {
             playAITurn();
         }
@@ -971,7 +992,6 @@ public class OthelloGUI extends JFrame {
     }
 
     private void handleSquareHover(int row, int col) {
-        // Handled sequentially in visualizer history frame generations
     }
 
     private void advanceTurn() {
@@ -1006,11 +1026,12 @@ public class OthelloGUI extends JFrame {
 
     private void playAITurn() {
         isProcessing = true;
-        stopAIButton.setVisible(true); // Visible when active AI starts thinking
+        stopAIButton.setVisible(true); 
         stopAIButton.setEnabled(true); 
         depthSlider.setEnabled(false); 
         bitboardRadio.setEnabled(false);
         ooRadio.setEnabled(false);
+        primitive2dRadio.setEnabled(false);
         nestedRadio.setEnabled(false);
         visualizerCheckbox.setEnabled(false);
         alphaBetaCheckbox.setEnabled(false);
@@ -1045,10 +1066,11 @@ public class OthelloGUI extends JFrame {
             protected void done() {
                 aiProgressTimer.stop(); 
                 stopAIButton.setEnabled(false); 
-                stopAIButton.setVisible(false); // Hidden when AI finishes
+                stopAIButton.setVisible(false); 
                 depthSlider.setEnabled(true); 
                 bitboardRadio.setEnabled(true);
                 ooRadio.setEnabled(true);
+                primitive2dRadio.setEnabled(true);
                 nestedRadio.setEnabled(true);
                 visualizerCheckbox.setEnabled(true);
                 alphaBetaCheckbox.setEnabled(true);
@@ -1133,6 +1155,8 @@ public class OthelloGUI extends JFrame {
             engineName = "Bitboard";
         } else if (selectedEngine == EngineType.FLAT_ARRAY) {
             engineName = "1D Flat Array";
+        } else if (selectedEngine == EngineType.PRIMITIVE_2D) {
+            engineName = "2D Primitive Values";
         } else {
             engineName = "2D Cell Objects";
         }
@@ -1146,21 +1170,18 @@ public class OthelloGUI extends JFrame {
                                         String[][] currentSquareMarkers, String[][] currentSquareTexts,
                                         boolean[][] evaluated, boolean[][] persistentValids, boolean[][] persistentInvalids) {
         
-        // 1. Apply highlights for currentSpaceInvalids (Red) and currentSpaceFailedOpponents (Red)
         for (int i = 0; i < 8; i++) {
             for (int j = 0; j < 8; j++) {
                 if (currentSpaceInvalids[i][j] || currentSpaceFailedOpponents[i][j]) {
-                    curHighlights[i][j] = 4; // Red Highlight
+                    curHighlights[i][j] = 4; 
                 }
             }
         }
 
-        // 2. Apply markers and texts for currentSpaceInvalids safely without overwriting evaluated squares
         for (int i = 0; i < 8; i++) {
             for (int j = 0; j < 8; j++) {
                 if (currentSpaceInvalids[i][j]) {
                     if (evaluated[i][j]) {
-                        // Already evaluated (Valid/Invalid) - leave text and symbol completely untouched!
                     } else if ("Own Piece".equals(currentSquareTexts[i][j])) {
                         markers[i][j] = "X";
                         tileTexts[i][j] = "Own Piece";
@@ -1186,7 +1207,7 @@ public class OthelloGUI extends JFrame {
     }
 
     private boolean isPotentialBitboardTarget(int r, int c, int player, int dirIndex) {
-        if (game.getPieceAt(r, c) != EMPTY) return false; // Target cell must be empty
+        if (game.getPieceAt(r, c) != EMPTY) return false; 
         
         int dr = DR[dirIndex];
         int dc = DC[dirIndex];
@@ -1196,33 +1217,29 @@ public class OthelloGUI extends JFrame {
         while (currR >= 0 && currR < 8 && currC >= 0 && currC < 8) {
             int piece = game.getPieceAt(currR, currC);
             if (piece == EMPTY) {
-                // An empty space in between blocks the bitboard shift propagation downstream
                 return false; 
             }
             if (piece == player) {
-                // Found our friendly piece connected via occupied pieces
                 return true;
             }
-            // If it is an opponent piece, we continue scanning backwards
             currR -= dr;
             currC -= dc;
         }
         return false;
     }
 
-    // Highlights all empty tiles under the influence of the active directional shift as Blue ("Evaluating")
     private void applyPotentialTargets(int[][] curHighlights, String[][] tileTexts, boolean[][] valids, boolean[][] invalids, int dirIndex) {
         for (int r = 0; r < 8; r++) {
             for (int c = 0; c < 8; c++) {
                 if (isPotentialBitboardTarget(r, c, currentPlayer, dirIndex)) {
                     if (valids[r][c]) {
-                        curHighlights[r][c] = 3; // Green (Valid)
+                        curHighlights[r][c] = 3; 
                         tileTexts[r][c] = "Valid";
                     } else if (invalids[r][c]) {
-                        curHighlights[r][c] = 4; // Red (Invalid)
+                        curHighlights[r][c] = 4; 
                         tileTexts[r][c] = "Invalid";
                     } else {
-                        curHighlights[r][c] = 1; // Turquoise (Evaluating)
+                        curHighlights[r][c] = 1; 
                         tileTexts[r][c] = "Evaluating";
                     }
                 }
@@ -1230,289 +1247,120 @@ public class OthelloGUI extends JFrame {
         }
     }
 
-    private void applyOOCandidateHighlights(int[][] curHighlights, String[][] tileTexts, String[][] markers,
-                                            boolean[][] evaluated,
-                                            boolean[][] persistentValids, boolean[][] persistentInvalids,
-                                            int nr, int nc, boolean isCurrentlyEvaluating) {
-        for (int r = 0; r < 8; r++) {
-            for (int c = 0; c < 8; c++) {
-                if (r == nr && c == nc && isCurrentlyEvaluating) {
-                    curHighlights[r][c] = 1; // Blue (Evaluating)
-                    tileTexts[r][c] = "Evaluating";
-                    markers[r][c] = "?"; // Automatically add active "?" to evaluating tile
-                } else if (evaluated[r][c]) {
-                    if (persistentValids[r][c]) {
-                        curHighlights[r][c] = 3; // Green (Valid)
-                        tileTexts[r][c] = "Valid";
-                        markers[r][c] = "✓";
-                    } else if (persistentInvalids[r][c]) {
-                        curHighlights[r][c] = 4; // Red (Invalid)
-                        tileTexts[r][c] = "Invalid";
-                        markers[r][c] = "X";
-                    }
-                } else {
-                    // Unexplored cell - standard green with absolutely no highlight (0)
-                    curHighlights[r][c] = 0; 
-                    
-                    // Preserve active local scan texts ("Own Piece", "Empty", "Valid")
-                    if (tileTexts[r][c] != null && (tileTexts[r][c].equals("Own Piece") || tileTexts[r][c].equals("Empty") || tileTexts[r][c].equals("Valid"))) {
-                        // Keep the active text during current neighbor evaluations
-                    } else {
-                        tileTexts[r][c] = ""; 
-                    }
-                    
-                    // Preserve active local scan markers ("X", "✓")
-                    if (markers[r][c] != null && (markers[r][c].equals("X") || markers[r][c].equals("✓") || markers[r][c].equals("?"))) {
-                        // Keep the active marker during current neighbor evaluations
-                    } else {
-                        markers[r][c] = null;
-                    }
-                }
+    private void drawCenteredMultiLineString(Graphics2D g2, String text, int cellWidth, int cellHeight, int row, int col, int highlight) {
+        if (text.isEmpty()) return;
+
+        int fontSize = 9;
+        if (text.equals("Valid") || text.equals("Invalid") || text.equals("Evaluating") || text.equals("End of board") || text.equals("Edge of board") || text.equals("Empty") || text.equals("Own Piece") || text.equals("Skip")) {
+            fontSize = 14; 
+        }
+
+        g2.setFont(new Font("Arial", Font.BOLD, fontSize));
+        FontMetrics fm = g2.getFontMetrics();
+        String[] lines = text.split("\n");
+        int lineHeight = fm.getHeight() - 2; 
+        int totalHeight = lineHeight * lines.length;
+        
+        int cellX = col * cellWidth;
+        int cellY = row * cellHeight;
+        
+        int startY = cellY + ((cellHeight - totalHeight) / 2) + fm.getAscent() - 13;
+        
+        if (text.equals("Skip")) {
+            startY += 3; 
+        }
+
+        for (int i = 0; i < lines.length; i++) {
+            String line = lines[i];
+            int startX = cellX + (cellWidth - fm.stringWidth(line)) / 2;
+            
+            if (text.equals("Skip")) {
+                startX += 3; 
             }
-        }
-    }
-
-    // Deep-copies arrow coordinate lists safely during history frame creation
-    private List<int[]> cloneArrows(List<int[]> source) {
-        List<int[]> clone = new ArrayList<>();
-        for (int[] a : source) {
-            clone.add(new int[]{a[0], a[1], a[2], a[3], a[4]});
-        }
-        return clone;
-    }
-
-    // Consolidated standard vector checkmark generator (Fixed "Tofu" Boxes)
-    private void drawCheckmark(Graphics2D g2, int cx, int cy, int size) {
-        g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-        g2.setStroke(new BasicStroke(4.0f));
-        
-        // Shadow
-        g2.setColor(new Color(0, 0, 0, 180));
-        g2.drawLine(cx - size/3 + 1, cy + 1, cx - size/10 + 1, cy + size/3 + 1);
-        g2.drawLine(cx - size/10 + 1, cy + size/3 + 1, cx + size/3 + 1, cy - size/3 + 1);
-        
-        // Foreground
-        g2.setColor(new Color(0, 255, 0));
-        g2.drawLine(cx - size/3, cy, cx - size/10, cy + size/3);
-        g2.drawLine(cx - size/10, cy + size/3, cx + size/3, cy - size/3);
-    }
-
-    // Consolidated standard vector cross (Drawn with identical 4.0f stroke and shadow)
-    private void drawCross(Graphics2D g2, int cx, int cy, int size) {
-        g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-        g2.setStroke(new BasicStroke(4.0f));
-        
-        // Shadow
-        g2.setColor(new Color(0, 0, 0, 180));
-        g2.drawLine(cx - size/3 + 1, cy - size/3 + 1, cx + size/3 + 1, cy + size/3 + 1);
-        g2.drawLine(cx + size/3 + 1, cy - size/3 + 1, cx - size/3 + 1, cy + size/3 + 1);
-        
-        // Foreground
-        g2.setColor(new Color(255, 50, 50));
-        g2.drawLine(cx - size/3, cy - size/3, cx + size/3, cy + size/3);
-        g2.drawLine(cx + size/3, cy - size/3, cx - size/3, cy + size/3);
-    }
-
-    private void drawVisualizerOverlays(Graphics2D g2) {
-        if (!visualizerMode || historyIndex < 0 || historyIndex >= vizHistory.size()) return;
-
-        g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-        VizState state = vizHistory.get(historyIndex);
-
-        int w = boardPanel.getWidth() / 8;
-        int h = boardPanel.getHeight() / 8;
-
-        // LAYER 1: Draw all segmented check arrows and bitboard shift arrows
-        g2.setStroke(new BasicStroke(4.0f)); 
-        for (int[] arrow : state.arrows) {
-            int startR = arrow[0];
-            int startC = arrow[1];
-            int endR = arrow[2];
-            int endC = arrow[3];
-            int colorType = arrow.length > 4 ? arrow[4] : 1; 
-
-            int x1 = startC * w + w / 2;
-            int y1 = startR * h + h / 2;
-            int x2 = endC * w + w / 2;
-            int y2 = endR * h + h / 2;
-
-            if (colorType == 2) {
-                g2.setColor(new Color(255, 50, 50));  // Red
-            } else if (colorType == 3) {
-                g2.setColor(new Color(0, 255, 0));    // Green
+            
+            int currentY = startY + i * lineHeight;
+            
+            g2.setColor(new Color(0, 0, 0, 220));
+            g2.drawString(line, startX + 1, currentY + 1);
+            
+            if (text.equals("Valid")) {
+                g2.setColor(new Color(0, 255, 0)); 
+            } else if (text.equals("Own Piece") && highlight == 3) {
+                g2.setColor(new Color(0, 255, 0)); 
+            } else if (text.equals("Own Piece") && highlight == 1) {
+                g2.setColor(new Color(255, 215, 0)); 
+            } else if (text.equals("Own Piece") && highlight == 2) {
+                g2.setColor(new Color(255, 215, 0)); 
+            } else if (text.equals("Empty") && highlight == 2) {
+                g2.setColor(new Color(255, 215, 0)); 
+            } else if (text.equals("Empty") && highlight == 1) {
+                g2.setColor(new Color(255, 215, 0)); 
+            } else if (text.equals("Skip")) {
+                g2.setColor(new Color(160, 32, 240)); 
+            } else if (text.equals("Invalid") || text.equals("End of board") || text.equals("Edge of board") || text.equals("Empty") || text.equals("Own Piece")) {
+                g2.setColor(new Color(255, 50, 50)); 
+            } else if (text.equals("Evaluating")) {
+                g2.setColor(Color.WHITE); 
             } else {
-                g2.setColor(new Color(255, 235, 0));   // Yellow
+                g2.setColor(Color.WHITE);
             }
-
-            drawArrowLine(g2, x1, y1, x2, y2, 18, 9); 
-        }
-
-        // Draw offscreen wall hit vectors (Typo fixed)
-        for (int[] wallHit : state.wallHits) {
-            int startR = wallHit[0];
-            int startC = wallHit[1];
-            int edgeR = wallHit[2];
-            int edgeC = wallHit[3];
-            int offR = wallHit[4];
-            int offC = wallHit[5];
-
-            int xs = startC * w + w / 2;
-            int ys = startR * h + h / 2;
-            int x1 = edgeC * w + w / 2; // Corrected
-            int y1 = edgeR * h + h / 2; // Corrected
-            int x2 = offC * w + w / 2;  // Corrected
-            int y2 = offR * h + h / 2;  // Corrected
-
-            int edgeX = x1 + (x2 - x1) / 2;
-            int edgeY = y1 + (y2 - y1) / 2;
-
-            g2.setColor(new Color(255, 50, 50)); // Red
-            drawArrowLine(g2, xs, ys, edgeX, edgeY, 18, 9);
-            drawCross(g2, edgeX, edgeY, 16); 
-        }
-
-        // LAYER 2: Draw all vector outcome markers
-        for (int r = 0; r < 8; r++) {
-            for (int c = 0; c < 8; c++) {
-                String marker = state.markers[r][c];
-                if (marker != null) {
-                    int cx = c * w + w / 2;
-                    int cy = r * h + h / 2;
-                    
-                    if (marker.equals("✓")) {
-                        int checkY = cy + 13;
-                        drawCheckmark(g2, cx, checkY, 24); 
-                    } else if (marker.equals("X")) {
-                        int crossY = cy + 13;
-                        drawCross(g2, cx, crossY, 20); 
-                    } else if (marker.equals("?")) {
-                        int qY = cy + 13;
-                        g2.setFont(new Font("Arial", Font.BOLD, 22));
-                        g2.setColor(Color.BLACK); 
-                        g2.drawString("?", cx - 6 + 1, qY + 1); // Shadow
-                        g2.setColor(Color.WHITE); 
-                        g2.drawString("?", cx - 6, qY); // Foreground
-                    } else if (marker.startsWith("Skip")) {
-                        int axis = Integer.parseInt(marker.substring(4));
-                        drawSkipDoubleArrow(g2, cx, cy, axis); // Draw vector double-arrow
-                    } else {
-                        // Render numerical sequence markers inside cell center
-                        g2.setFont(new Font("Arial", Font.BOLD, 18));
-                        g2.setColor(Color.BLACK); 
-                        g2.drawString(marker, cx - 5 + 1, cy + 7 + 1); // Shadow
-                        g2.setColor(new Color(255, 235, 0)); 
-                        g2.drawString(marker, cx - 5, cy + 7); // Foreground
-                    }
-                }
-            }
-        }
-
-        // LAYER 3: Draw visualizer text labels
-        for (int r = 0; r < 8; r++) {
-            for (int c = 0; c < 8; c++) {
-                String text = state.tileTexts[r][c];
-                boolean isPersistentValid = state.persistentValids[r][c];
-                boolean isPersistentInvalid = state.persistentInvalids[r][c];
-
-                if (text == null) text = "";
-
-                if (!text.isEmpty()) {
-                    drawCenteredMultiLineString(g2, text, w, h, r, c, state.highlights[r][c]);
-                } else if (isPersistentValid) {
-                    drawCenteredMultiLineString(g2, "Valid", w, h, r, c, 3);
-                } else if (isPersistentInvalid) {
-                    drawCenteredMultiLineString(g2, "Invalid", w, h, r, c, 4);
-                }
-            }
+            g2.drawString(line, startX, currentY);
         }
     }
 
     private void drawSkipDoubleArrow(Graphics2D g2, int cx, int cy, int axis) {
         g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 
-        // Center horizontally (cx) and shift down slightly (cy + 10) to clear the top-aligned "Skip" text
         int arrowCx = cx;
         int arrowCy = cy + 10;
 
-        if (axis == 0) { // Horizontal
+        if (axis == 0) { 
             arrowCx += 2;
             arrowCy -= 3;
-        } else if (axis == 1) { // Vertical
+        } else if (axis == 1) { 
             arrowCx += 3;
-        } else { // Diagonal NW-SE (2) and NE-SW (3)
-            arrowCx += 3; // Move right slightly
-            arrowCy -= 3; // Move up slightly
+        } else { 
+            arrowCx += 3; 
+            arrowCy -= 3; 
         }
 
-        int len = 12; // Good size
+        int len = 12; 
         g2.setStroke(new BasicStroke(3.0f));
-        
-        // Render foreground double-sided arrow only (Shadow removed)
-        drawSingleAxisDoubleArrow(g2, arrowCx, arrowCy, len, axis, new Color(160, 32, 240)); // Purple
-    }
-
-    private void drawDoubleEndedArrow(Graphics2D g, int x1, int y1, int x2, int y2, int d, int h) {
-        int dx = x2 - x1, dy = y2 - y1;
-        double D = Math.sqrt(dx * dx + dy * dy);
-        if (D < 1) return;
-        
-        double sin = dy / D, cos = dx / D;
-        
-        // Base of the arrowhead at (x1, y1) pointing towards (x2, y2)
-        // Pulled back by d units to hide the line completely under the arrowhead polygon
-        double x1_base = x1 + d * cos;
-        double y1_base = y1 + d * sin;
-        
-        // Base of the arrowhead at (x2, y2) pointing towards (x1, y1)
-        double x2_base = x2 - d * cos;
-        double y2_base = y2 - d * sin;
-        
-        // Draw the line segment strictly between the arrowhead bases (zero gaps, zero overlaps)
-        g.drawLine((int) x1_base, (int) y1_base, (int) x2_base, (int) y2_base);
-        
-        // Draw arrowhead 1 (at x1, y1 pointing out)
-        drawSingleArrowHead(g, x2, y2, x1, y1, d, h);
-        
-        // Draw arrowhead 2 (at x2, y2 pointing out)
-        drawSingleArrowHead(g, x1, y1, x2, y2, d, h);
+        drawSingleAxisDoubleArrow(g2, arrowCx, arrowCy, len, axis, new Color(160, 32, 240)); 
     }
 
     private void drawSingleAxisDoubleArrow(Graphics2D g2, int cx, int cy, int len, int axis, Color color) {
         g2.setColor(color);
-        int d = 8; // Arrowhead length
-        int h = 5; // Arrowhead half-width
+        int d = 8; 
+        int h = 5; 
 
-        if (axis == 0) { // Horizontal ↔
+        if (axis == 0) { 
             int x1 = cx - len;
             int x2 = cx + len;
-            g2.drawLine(x1 + d - 1, cy, x2 - d + 1, cy); // Pulled line back slightly to hide ends
+            g2.drawLine(x1 + d - 1, cy, x2 - d + 1, cy); 
             
-            // Left arrowhead pointing West
             int[] xp1 = {x1, x1 + d, x1 + d};
             int[] yp1 = {cy, cy - h, cy + h};
             g2.fillPolygon(xp1, yp1, 3);
             
-            // Right arrowhead pointing East
             int[] xp2 = {x2, x2 - d, x2 - d};
             int[] yp2 = {cy, cy - h, cy + h};
             g2.fillPolygon(xp2, yp2, 3);
             
-        } else if (axis == 1) { // Vertical ↕
+        } else if (axis == 1) { 
             int y1 = cy - len;
             int y2 = cy + len;
             g2.drawLine(cx, y1 + d - 1, cx, y2 - d + 1);
             
-            // Top arrowhead pointing North
             int[] xp1 = {cx, cx - h, cx + h};
             int[] yp1 = {y1, y1 + d, y1 + d};
             g2.fillPolygon(xp1, yp1, 3);
             
-            // Bottom arrowhead pointing South
             int[] xp2 = {cx, cx - h, cx + h};
             int[] yp2 = {y2, y2 - d, y2 - d};
             g2.fillPolygon(xp2, yp2, 3);
             
-        } else if (axis == 2) { // NW-SE ⤡
+        } else if (axis == 2) { 
             int offset = (int)(len * 0.707);
             int x1 = cx - offset;
             int y1 = cy - offset;
@@ -1522,20 +1370,17 @@ public class OthelloGUI extends JFrame {
             int od = (int)(d * 0.707);
             int oh = (int)(h * 0.707);
             
-            // Draw line between bases
             g2.drawLine(x1 + od - 1, y1 + od - 1, x2 - od + 1, y2 - od + 1);
             
-            // Top-left arrowhead pointing NW (Tip at x1, y1)
             int[] xp1 = {x1, x1 + od - oh, x1 + od + oh};
             int[] yp1 = {y1, y1 + od + oh, y1 + od - oh};
             g2.fillPolygon(xp1, yp1, 3);
             
-            // Bottom-right arrowhead pointing SE (Tip at x2, y2)
             int[] xp2 = {x2, x2 - od - oh, x2 - od + oh};
             int[] yp2 = {y2, y2 - od + oh, y2 - od - oh};
             g2.fillPolygon(xp2, yp2, 3);
             
-        } else if (axis == 3) { // NE-SW ⤢
+        } else if (axis == 3) { 
             int offset = (int)(len * 0.707);
             int x1 = cx + offset;
             int y1 = cy - offset;
@@ -1545,15 +1390,12 @@ public class OthelloGUI extends JFrame {
             int od = (int)(d * 0.707);
             int oh = (int)(h * 0.707);
             
-            // Draw line between bases
             g2.drawLine(x1 - od + 1, y1 + od - 1, x2 + od - 1, y2 - od + 1);
             
-            // Top-right arrowhead pointing NE (Tip at x1, y1)
             int[] xp1 = {x1, x1 - od - oh, x1 - od + oh};
             int[] yp1 = {y1, y1 + od - oh, y1 + od + oh};
             g2.fillPolygon(xp1, yp1, 3);
             
-            // Bottom-left arrowhead pointing SW (Tip at x2, y2)
             int[] xp2 = {x2, x2 + od - oh, x2 + od + oh};
             int[] yp2 = {y2, y2 - od - oh, y2 - od + oh};
             g2.fillPolygon(xp2, yp2, 3);
@@ -1561,8 +1403,8 @@ public class OthelloGUI extends JFrame {
     }
 
     private void drawArrowHeads(Graphics2D g, int x1, int y1, int x2, int y2, int d, int h) {
-        drawSingleArrowHead(g, x2, y2, x1, y1, d, h); // Tip 1
-        drawSingleArrowHead(g, x1, y1, x2, y2, d, h); // Tip 2
+        drawSingleArrowHead(g, x2, y2, x1, y1, d, h); 
+        drawSingleArrowHead(g, x1, y1, x2, y2, d, h); 
     }
 
     private void drawSingleArrowHead(Graphics2D g, int x1, int y1, int x2, int y2, int d, int h) {
@@ -1581,7 +1423,6 @@ public class OthelloGUI extends JFrame {
         g.fillPolygon(xpoints, ypoints, 3);
     }
 
-    // Mathematical standard arrowhead generator (Pulls line ends back slightly to look pristine on grid)
     private void drawArrowLine(Graphics2D g, int x1, int y1, int x2, int y2, int d, int h) {
         int dx = x2 - x1, dy = y2 - y1;
         double D = Math.sqrt(dx * dx + dy * dy);
@@ -1602,17 +1443,14 @@ public class OthelloGUI extends JFrame {
         int dy_adj = y2_i - y1_i;
         double D_adj = Math.sqrt(dx_adj * dx_adj + dy_adj * dy_adj);
 
-        double xm = D_adj - d; // Base of the arrowhead
+        double xm = D_adj - d; 
         double sin = dy_adj / D_adj, cos = dx_adj / D_adj;
 
-        // Calculate the exact base point where the line meets the arrowhead
         int x_base = (int) (xm * cos + x1_i);
         int y_base = (int) (xm * sin + y1_i);
 
-        // Draw line strictly to the base of the arrowhead so the square line cap is hidden
         g.drawLine(x1_i, y1_i, x_base, y_base);
 
-        // Draw solid arrowhead polygon for a perfect, sharp point
         double ym = h, yn = -h;
         double x_m_rot = xm * cos - ym * sin + x1_i;
         double y_m_rot = xm * sin + ym * cos + y1_i;
@@ -1625,106 +1463,6 @@ public class OthelloGUI extends JFrame {
         g.fillPolygon(xpoints, ypoints, 3);
     }
 
-    private void drawCenteredMultiLineString(Graphics2D g2, String text, int cellWidth, int cellHeight, int row, int col, int highlight) {
-        if (text.isEmpty()) return;
-
-        int fontSize = 9;
-        if (text.equals("Valid") || text.equals("Invalid") || text.equals("Evaluating") || text.equals("End of board") || text.equals("Edge of board") || text.equals("Empty") || text.equals("Own Piece") || text.equals("Skip")) {
-            fontSize = 14; 
-        }
-
-        g2.setFont(new Font("Arial", Font.BOLD, fontSize));
-        FontMetrics fm = g2.getFontMetrics();
-        String[] lines = text.split("\n");
-        int lineHeight = fm.getHeight() - 2; 
-        int totalHeight = lineHeight * lines.length;
-        
-        int cellX = col * cellWidth;
-        int cellY = row * cellHeight;
-        
-        // Shift text upwards by 13 pixels as default
-        int startY = cellY + ((cellHeight - totalHeight) / 2) + fm.getAscent() - 13;
-        
-        if (text.equals("Skip")) {
-            startY += 3; // Shifted up slightly from the previous value (+8)
-        }
-
-        for (int i = 0; i < lines.length; i++) {
-            String line = lines[i];
-            int startX = cellX + (cellWidth - fm.stringWidth(line)) / 2;
-            
-            if (text.equals("Skip")) {
-                startX += 3; // Move text slightly to the right
-            }
-            
-            int currentY = startY + i * lineHeight;
-            
-            // Draw high-contrast drop shadow
-            g2.setColor(new Color(0, 0, 0, 220));
-            g2.drawString(line, startX + 1, currentY + 1);
-            
-            // Draw foreground text
-            if (text.equals("Valid")) {
-                g2.setColor(new Color(0, 255, 0)); // Bright Green
-            } else if (text.equals("Own Piece") && highlight == 3) {
-                g2.setColor(new Color(0, 255, 0)); // Bright Green on successful anchor
-            } else if (text.equals("Own Piece") && highlight == 1) {
-                g2.setColor(new Color(255, 215, 0)); // Yellow on active scan step
-            } else if (text.equals("Own Piece") && highlight == 2) {
-                g2.setColor(new Color(255, 215, 0)); // Yellow
-            } else if (text.equals("Empty") && highlight == 2) {
-                g2.setColor(new Color(255, 215, 0)); // Yellow
-            } else if (text.equals("Empty") && highlight == 1) {
-                g2.setColor(new Color(255, 215, 0)); // Yellow
-            } else if (text.equals("Skip")) {
-                g2.setColor(new Color(160, 32, 240)); // Purple text
-            } else if (text.equals("Invalid") || text.equals("End of board") || text.equals("Edge of board") || text.equals("Empty") || text.equals("Own Piece")) {
-                g2.setColor(new Color(255, 50, 50)); // Bright Red
-            } else if (text.equals("Evaluating")) {
-                g2.setColor(Color.WHITE); // Crisp White
-            } else {
-                g2.setColor(Color.WHITE);
-            }
-            g2.drawString(line, startX, currentY);
-        }
-    }
-
-    private void applyEndpointPreviews(int[][] curHighlights, String[][] texts, String[][] markers,
-                                       boolean termPlusOnBoard, int termPlusR, int termPlusC,
-                                       boolean termMinusOnBoard, int termMinusR, int termMinusC,
-                                       boolean[][] persistentValids) {
-        if (termPlusOnBoard) {
-            int type = game.getPieceAt(termPlusR, termPlusC);
-            if (type == EMPTY && !persistentValids[termPlusR][termPlusC]) {
-                curHighlights[termPlusR][termPlusC] = 1; // Turquoise
-                texts[termPlusR][termPlusC] = "Evaluating";
-                markers[termPlusR][termPlusC] = "?";
-            } else if (type == currentPlayer && !persistentValids[termPlusR][termPlusC]) {
-                curHighlights[termPlusR][termPlusC] = 1; // Turquoise
-                texts[termPlusR][termPlusC] = "Own Piece";
-                markers[termPlusR][termPlusC] = null;
-            }
-        }
-        if (termMinusOnBoard) {
-            int type = game.getPieceAt(termMinusR, termMinusC);
-            if (type == EMPTY && !persistentValids[termMinusR][termMinusC]) {
-                curHighlights[termMinusR][termMinusC] = 1; // Turquoise
-                texts[termMinusR][termMinusC] = "Evaluating";
-                markers[termMinusR][termMinusC] = "?";
-            } else if (type == currentPlayer && !persistentValids[termMinusR][termMinusC]) {
-                curHighlights[termMinusR][termMinusC] = 1; // Turquoise
-                texts[termMinusR][termMinusC] = "Own Piece";
-                markers[termMinusR][termMinusC] = null;
-            }
-        }
-    }
-
-    private void copyStringArray(String[][] source, String[][] dest) {
-        for (int i = 0; i < 8; i++) {
-            System.arraycopy(source[i], 0, dest[i], 0, 8);
-        }
-    }
-
     private void applyEndpointHighlights(int[][] curHighlights, 
                                          boolean termPlusOnBoard, int termPlusR, int termPlusC,
                                          boolean termMinusOnBoard, int termMinusR, int termMinusC,
@@ -1732,13 +1470,13 @@ public class OthelloGUI extends JFrame {
         if (termPlusOnBoard) {
             int type = game.getPieceAt(termPlusR, termPlusC);
             if ((type == EMPTY || type == currentPlayer) && !persistentValids[termPlusR][termPlusC]) {
-                curHighlights[termPlusR][termPlusC] = 1; // Turquoise
+                curHighlights[termPlusR][termPlusC] = 1; 
             }
         }
         if (termMinusOnBoard) {
             int type = game.getPieceAt(termMinusR, termMinusC);
             if ((type == EMPTY || type == currentPlayer) && !persistentValids[termMinusR][termMinusC]) {
-                curHighlights[termMinusR][termMinusC] = 1; // Turquoise
+                curHighlights[termMinusR][termMinusC] = 1; 
             }
         }
     }
@@ -1778,18 +1516,31 @@ public class OthelloGUI extends JFrame {
         if (termOnBoard) {
             int type = game.getPieceAt(termR, termC);
             if (type == EMPTY && !persistentValids[termR][termC]) {
-                curHighlights[termR][termC] = 1; // Turquoise
+                curHighlights[termR][termC] = 1; 
                 texts[termR][termC] = "Evaluating";
                 markers[termR][termC] = "?";
             } else if (type == currentPlayer && !persistentValids[termR][termC]) {
-                curHighlights[termR][termC] = 1; // Turquoise
+                curHighlights[termR][termC] = 1; 
                 texts[termR][termC] = "Own Piece";
                 markers[termR][termC] = null;
             }
         }
     }
 
-// Frame-by-Frame OO Segment-Scanning History Generator (1D Array Optimized Engine with Step Decomposition)
+    private void copyStringArray(String[][] source, String[][] dest) {
+        for (int i = 0; i < 8; i++) {
+            System.arraycopy(source[i], 0, dest[i], 0, 8);
+        }
+    }
+
+    private List<int[]> cloneArrows(List<int[]> source) {
+        List<int[]> clone = new ArrayList<>();
+        for (int[] a : source) {
+            clone.add(new int[]{a[0], a[1], a[2], a[3], a[4]});
+        }
+        return clone;
+    }
+
     private void generateFlatArrayOptimizedHistory() {
         vizHistory.clear();
         historyIndex = -1;
@@ -1798,7 +1549,6 @@ public class OthelloGUI extends JFrame {
         boolean[][] persistentValids = new boolean[8][8];
         boolean[][] persistentInvalids = new boolean[8][8];
         
-        // processed[64][4] tracks processed axes safely
         boolean[][] processed = new boolean[64][4];
         boolean[] added = new boolean[64];
         
@@ -1819,10 +1569,9 @@ public class OthelloGUI extends JFrame {
             String cellName = OthelloBitboard.indexToAlgebraic(i);
             int pieceAtCell = game.getPieceAt(r, c);
 
-            // Sweep Frame (Runs sequentially through all cells)
             clearArray(curHighlights);
             applyOOCandidateHighlights(curHighlights, new String[8][8], new String[8][8], evaluated, persistentValids, persistentInvalids, -1, -1, false);
-            curHighlights[r][c] = 2; // Yellow active sweep cursor
+            curHighlights[r][c] = 2; 
             
             String sweepExplanation;
             if (pieceAtCell == EMPTY) {
@@ -1852,10 +1601,9 @@ public class OthelloGUI extends JFrame {
                 int dc = dcAxes[axis];
 
                 if (processed[i][axis]) {
-                    // Skip Frame
                     clearArray(curHighlights);
                     applyOOCandidateHighlights(curHighlights, new String[8][8], new String[8][8], evaluated, persistentValids, persistentInvalids, -1, -1, false);
-                    curHighlights[r][c] = 6; // Purple (Skipping)
+                    curHighlights[r][c] = 6; 
                     
                     VizState skipState = new VizState(r, c, -1, 0, persistentValids, persistentInvalids, curHighlights, 
                             String.format("Axis %s on %s has already been processed. Skipping.", axisName, cellName));
@@ -1865,7 +1613,7 @@ public class OthelloGUI extends JFrame {
                     
                     curHighlights[r][c] = 6;
                     skipTexts[r][c] = "Skip";
-                    skipMarkers[r][c] = AXIS_ARROWS[axis]; // Tag double-sided arrow routing
+                    skipMarkers[r][c] = AXIS_ARROWS[axis]; 
                     
                     skipState.setTileTexts(skipTexts);
                     skipState.setMarkers(skipMarkers);
@@ -1873,7 +1621,6 @@ public class OthelloGUI extends JFrame {
                     continue;
                 }
 
-                // Scan + Direction
                 List<int[]> scanPlus = new ArrayList<>();
                 int currR = r + dr;
                 int currC = c + dc;
@@ -1886,7 +1633,6 @@ public class OthelloGUI extends JFrame {
                 int termPlusC = currC;
                 boolean termPlusOnBoard = (termPlusR >= 0 && termPlusR < 8 && termPlusC >= 0 && termPlusC < 8);
 
-                // Scan - Direction
                 List<int[]> scanMinus = new ArrayList<>();
                 currR = r - dr;
                 currC = c - dc;
@@ -1913,23 +1659,20 @@ public class OthelloGUI extends JFrame {
                     String[][] step1Markers = new String[8][8];
                     applyOOCandidateHighlights(curHighlights, step1Texts, step1Markers, evaluated, persistentValids, persistentInvalids, -1, -1, false);
                     
-                    curHighlights[r][c] = 5; // Highlight active root white piece in Orange
-                    step1Markers[r][c] = "1"; // Current piece is always labeled '1'
+                    curHighlights[r][c] = 5; 
+                    step1Markers[r][c] = "1"; 
 
-                    // Apply active candidate previews in Turquoise (Value 1)
                     applyEndpointHighlights(curHighlights, 
                                             termPlusOnBoard, termPlusR, termPlusC, 
                                             termMinusOnBoard, termMinusR, termMinusC, 
                                             persistentValids);
 
-                    // Highlight discovered opponents in Yellow and label sequentially
                     int labelIndex = 2;
                     for (int[] p : activePlus) {
-                        curHighlights[p[0]][p[1]] = 2; // Yellow
+                        curHighlights[p[0]][p[1]] = 2; 
                         step1Markers[p[0]][p[1]] = String.valueOf(labelIndex++);
                     }
 
-                    // Draw yellow scan arrows extending outward
                     List<int[]> step1Arrows = new ArrayList<>();
                     int pr = r;
                     int pc = c;
@@ -1946,7 +1689,6 @@ public class OthelloGUI extends JFrame {
                     step1State.setTileTexts(step1Texts);
                     step1State.setMarkers(step1Markers);
                     
-                    // Texts/markers are guarded: plusText remains hidden (false) during scan
                     applyEndpointTextsAndMarkers(step1State.tileTexts, step1State.markers,
                                                  termPlusOnBoard, termPlusR, termPlusC, false,
                                                  termMinusOnBoard, termMinusR, termMinusC, false,
@@ -1958,13 +1700,12 @@ public class OthelloGUI extends JFrame {
                     plusPieceCount++;
                 }
                 
-                // Add final frame for '+' terminal endpoint discovery (Scoping collision fixed)
                 clearArray(curHighlights);
                 String[][] termPlusTexts = new String[8][8];
                 String[][] termPlusMarkers = new String[8][8];
                 applyOOCandidateHighlights(curHighlights, termPlusTexts, termPlusMarkers, evaluated, persistentValids, persistentInvalids, -1, -1, false);
                 
-                curHighlights[r][c] = 5; // Orange
+                curHighlights[r][c] = 5; 
                 termPlusMarkers[r][c] = "1";
                 
                 applyEndpointHighlights(curHighlights, 
@@ -1974,7 +1715,7 @@ public class OthelloGUI extends JFrame {
 
                 int labelIdx = 2;
                 for (int[] p : scanPlus) {
-                    curHighlights[p[0]][p[1]] = 2; // Yellow
+                    curHighlights[p[0]][p[1]] = 2; 
                     termPlusMarkers[p[0]][p[1]] = String.valueOf(labelIdx++);
                 }
                 
@@ -1988,15 +1729,10 @@ public class OthelloGUI extends JFrame {
                 }
                 
                 List<int[]> termPlusWallHits = new ArrayList<>();
-                VizState termPlusState; // Scope declared cleanly
+                VizState termPlusState; 
                 
                 if (termPlusOnBoard) {
-                    termPlusArrows.add(new int[]{pr, pc, termPlusR, termPlusC, 1}); // Yellow arrow to terminal
-                    
-                    int targetType = game.getPieceAt(termPlusR, termPlusC);
-                    if (targetType == currentPlayer && !persistentValids[termPlusR][termPlusC]) {
-                        // Scan encounters Own Piece: Handled by applyEndpointPreviews safely
-                    }
+                    termPlusArrows.add(new int[]{pr, pc, termPlusR, termPlusC, 1}); 
                     
                     termPlusState = new VizState(r, c, -1, 0, persistentValids, persistentInvalids, curHighlights, 
                             String.format("Axis %s: Terminal endpoint in [+] direction is located at %s.", 
@@ -2005,7 +1741,6 @@ public class OthelloGUI extends JFrame {
                     termPlusState = new VizState(r, c, -1, 0, persistentValids, persistentInvalids, curHighlights, 
                             String.format("Axis %s: Scan hits boundary edge in [+] direction.", axisName));
                             
-                    // Fallback to active orange root cell (r, c) on immediate wall hits
                     int boundaryR = scanPlus.isEmpty() ? r : scanPlus.get(scanPlus.size() - 1)[0];
                     int boundaryC = scanPlus.isEmpty() ? c : scanPlus.get(scanPlus.size() - 1)[1];
                     termPlusWallHits.add(new int[]{boundaryR, boundaryC, boundaryR, boundaryC, termPlusR, termPlusC});
@@ -2017,7 +1752,6 @@ public class OthelloGUI extends JFrame {
                 termPlusState.setTileTexts(termPlusTexts);
                 termPlusState.setMarkers(termPlusMarkers);
                 
-                // Scan reaches '+' terminal: reveal plusText (true) while keeping minusText hidden (false)
                 applyEndpointTextsAndMarkers(termPlusState.tileTexts, termPlusState.markers,
                                              termPlusOnBoard, termPlusR, termPlusC, true,
                                              termMinusOnBoard, termMinusR, termMinusC, false,
@@ -2039,7 +1773,7 @@ public class OthelloGUI extends JFrame {
                     String[][] step2Markers = new String[8][8];
                     applyOOCandidateHighlights(curHighlights, step2Texts, step2Markers, evaluated, persistentValids, persistentInvalids, -1, -1, false);
                     
-                    curHighlights[r][c] = 5; // Orange
+                    curHighlights[r][c] = 5; 
                     step2Markers[r][c] = "1";
 
                     applyEndpointHighlights(curHighlights, 
@@ -2047,7 +1781,6 @@ public class OthelloGUI extends JFrame {
                                             termMinusOnBoard, termMinusR, termMinusC, 
                                             persistentValids);
 
-                    // Continue sequence labels from step 1
                     int sequentialLabel = 2;
                     for (int[] p : scanPlus) {
                         curHighlights[p[0]][p[1]] = 2;
@@ -2059,7 +1792,6 @@ public class OthelloGUI extends JFrame {
                     }
 
                     List<int[]> step2Arrows = new ArrayList<>();
-                    // + arrows
                     int ar = r;
                     int ac = c;
                     for (int[] p : scanPlus) {
@@ -2070,7 +1802,6 @@ public class OthelloGUI extends JFrame {
                     if (termPlusOnBoard) {
                         step2Arrows.add(new int[]{ar, ac, termPlusR, termPlusC, 1});
                     }
-                    // - arrows
                     ar = r;
                     ac = c;
                     for (int[] p : activeMinus) {
@@ -2086,7 +1817,6 @@ public class OthelloGUI extends JFrame {
                     step2State.setTileTexts(step2Texts);
                     step2State.setMarkers(step2Markers);
                     
-                    // Keep plusText visible (true) while keeping minusText hidden (false) during scan
                     applyEndpointTextsAndMarkers(step2State.tileTexts, step2State.markers,
                                                  termPlusOnBoard, termPlusR, termPlusC, true,
                                                  termMinusOnBoard, termMinusR, termMinusC, false,
@@ -2098,7 +1828,6 @@ public class OthelloGUI extends JFrame {
                     minusPieceCount++;
                 }
                 
-                // Add final frame for '-' terminal endpoint discovery (Removed duplicate type definitions)
                 termMinusR = currR;
                 termMinusC = currC;
                 termMinusOnBoard = (termMinusR >= 0 && termMinusR < 8 && termMinusC >= 0 && termMinusC < 8);
@@ -2108,7 +1837,7 @@ public class OthelloGUI extends JFrame {
                 String[][] termMinusMarkers = new String[8][8];
                 applyOOCandidateHighlights(curHighlights, termMinusTexts, termMinusMarkers, evaluated, persistentValids, persistentInvalids, -1, -1, false);
                 
-                curHighlights[r][c] = 5; // Orange
+                curHighlights[r][c] = 5; 
                 termMinusMarkers[r][c] = "1";
 
                 applyEndpointHighlights(curHighlights, 
@@ -2127,7 +1856,6 @@ public class OthelloGUI extends JFrame {
                 }
                 
                 List<int[]> termMinusArrows = new ArrayList<>();
-                // + arrows
                 int ar = r;
                 int ac = c;
                 for (int[] p : scanPlus) {
@@ -2138,7 +1866,6 @@ public class OthelloGUI extends JFrame {
                 if (termPlusOnBoard) {
                     termMinusArrows.add(new int[]{ar, ac, termPlusR, termPlusC, 1});
                 }
-                // - arrows
                 ar = r;
                 ac = c;
                 for (int[] p : scanMinus) {
@@ -2148,7 +1875,7 @@ public class OthelloGUI extends JFrame {
                 }
                 
                 List<int[]> termMinusWallHits = new ArrayList<>();
-                VizState termMinusState; // Scope declared cleanly
+                VizState termMinusState; 
                 
                 if (termMinusOnBoard) {
                     termMinusArrows.add(new int[]{ar, ac, termMinusR, termMinusC, 1});
@@ -2171,7 +1898,6 @@ public class OthelloGUI extends JFrame {
                 termMinusState.setTileTexts(termMinusTexts);
                 termMinusState.setMarkers(termMinusMarkers);
                 
-                // Scan reaches '-' terminal: reveal both plusText (true) and minusText (true)
                 applyEndpointTextsAndMarkers(termMinusState.tileTexts, termMinusState.markers,
                                              termPlusOnBoard, termPlusR, termPlusC, true,
                                              termMinusOnBoard, termMinusR, termMinusC, true,
@@ -2192,7 +1918,6 @@ public class OthelloGUI extends JFrame {
                     boolean match2 = (game.getPieceAt(termMinusR, termMinusC) == EMPTY && game.getPieceAt(termPlusR, termPlusC) == currentPlayer);
 
                     if (match1 || match2) {
-                        // Valid segment found!
                         clearArray(curHighlights);
                         String[][] successTexts = new String[8][8];
                         String[][] successMarkers = new String[8][8];
@@ -2205,17 +1930,16 @@ public class OthelloGUI extends JFrame {
                             persistentValids[termPlusR][termPlusC] = true;
                             added[plusIdx] = true;
                             
-                            curHighlights[termPlusR][termPlusC] = 3; // Green Valid
-                            curHighlights[termMinusR][termMinusC] = 3; // Green Friendly Anchor
+                            curHighlights[termPlusR][termPlusC] = 3; 
+                            curHighlights[termMinusR][termMinusC] = 3; 
                             for (int[] p : scanPlus) curHighlights[p[0]][p[1]] = 3;
                             for (int[] p : scanMinus) curHighlights[p[0]][p[1]] = 3;
                             curHighlights[r][c] = 3;
 
-                            // Arrows originate at EMPTY space pointing towards Anchor own piece
                             int tempR = termPlusR;
                             int tempC = termPlusC;
                             while (tempR != termMinusR || tempC != termMinusC) {
-                                successArrows.add(new int[]{tempR, tempC, tempR - dr, tempC - dc, 3}); // Green arrow
+                                successArrows.add(new int[]{tempR, tempC, tempR - dr, tempC - dc, 3}); 
                                 tempR -= dr;
                                 tempC -= dc;
                             }
@@ -2223,7 +1947,6 @@ public class OthelloGUI extends JFrame {
                             successTexts[termPlusR][termPlusC] = "Valid";
                             successMarkers[termPlusR][termPlusC] = "✓";
                             
-                            // Own pieces are colored Green with no error cross
                             successTexts[termMinusR][termMinusC] = "Own Piece";
                             successMarkers[termMinusR][termMinusC] = null;
                         } else {
@@ -2231,17 +1954,16 @@ public class OthelloGUI extends JFrame {
                             persistentValids[termMinusR][termMinusC] = true;
                             added[minusIdx] = true;
 
-                            curHighlights[termMinusR][termMinusC] = 3; // Green Valid
-                            curHighlights[termPlusR][termPlusC] = 3; // Green Friendly Anchor
+                            curHighlights[termMinusR][termMinusC] = 3; 
+                            curHighlights[termPlusR][termPlusC] = 3; 
                             for (int[] p : scanPlus) curHighlights[p[0]][p[1]] = 3;
                             for (int[] p : scanMinus) curHighlights[p[0]][p[1]] = 3;
                             curHighlights[r][c] = 3;
 
-                            // Arrows originate at EMPTY space pointing towards Anchor own piece
                             int tempR = termMinusR;
                             int tempC = termMinusC;
                             while (tempR != termPlusR || tempC != termPlusC) {
-                                successArrows.add(new int[]{tempR, tempC, tempR + dr, tempC + dc, 3}); // Green arrow
+                                successArrows.add(new int[]{tempR, tempC, tempR + dr, tempC + dc, 3}); 
                                 tempR += dr;
                                 tempC += dc;
                             }
@@ -2260,7 +1982,6 @@ public class OthelloGUI extends JFrame {
                         successState.setMarkers(successMarkers);
                         vizHistory.add(successState);
                     } else {
-                        // Invalid Segment
                         clearArray(curHighlights);
                         String[][] failTexts = new String[8][8];
                         String[][] failMarkers = new String[8][8];
@@ -2268,29 +1989,27 @@ public class OthelloGUI extends JFrame {
                         
                         List<int[]> failArrows = new ArrayList<>();
 
-                        curHighlights[termPlusR][termPlusC] = 4; // Red
-                        curHighlights[termMinusR][termMinusC] = 4; // Red
+                        curHighlights[termPlusR][termPlusC] = 4; 
+                        curHighlights[termMinusR][termMinusC] = 4; 
                         for (int[] p : scanPlus) curHighlights[p[0]][p[1]] = 4;
                         for (int[] p : scanMinus) curHighlights[p[0]][p[1]] = 4;
                         curHighlights[r][c] = 4;
 
-                        // Draw red arrows in both directions from center
                         int tempR = r;
                         int tempC = c;
                         while (tempR != termPlusR || tempC != termPlusC) {
-                            failArrows.add(new int[]{tempR, tempC, tempR + dr, tempC + dc, 2}); // Red arrow
+                            failArrows.add(new int[]{tempR, tempC, tempR + dr, tempC + dc, 2}); 
                             tempR += dr;
                             tempC += dc;
                         }
                         tempR = r;
                         tempC = c;
                         while (tempR != termMinusR || tempC != termMinusC) {
-                            failArrows.add(new int[]{tempR, tempC, tempR - dr, tempC - dc, 2}); // Red arrow
+                            failArrows.add(new int[]{tempR, tempC, tempR - dr, tempC - dc, 2}); 
                             tempR -= dr;
                             tempC -= dc;
                         }
 
-                        // Style empty failure terminals. Friendly pieces get no cross or red text.
                         int pPiece = game.getPieceAt(termPlusR, termPlusC);
                         if (pPiece == EMPTY) {
                             if (persistentValids[termPlusR][termPlusC]) {
@@ -2321,7 +2040,6 @@ public class OthelloGUI extends JFrame {
                         vizHistory.add(failState);
                     }
                 } else {
-                    // One of the terminals is off-board (wall hit)
                     clearArray(curHighlights);
                     String[][] failTexts = new String[8][8];
                     String[][] failMarkers = new String[8][8];
@@ -2345,13 +2063,12 @@ public class OthelloGUI extends JFrame {
                                 failMarkers[termPlusR][termPlusC] = "X";
                             }
                         } else if (pPiece == currentPlayer) {
-                            failTexts[termPlusR][termPlusC] = "Own Piece"; // Colored Red automatically (Value 4)
+                            failTexts[termPlusR][termPlusC] = "Own Piece"; 
                         }
                     } else {
-                        // Fallback to active orange root cell (r, c) on immediate wall hits
                         int boundaryR = scanPlus.isEmpty() ? r : scanPlus.get(scanPlus.size() - 1)[0];
                         int boundaryC = scanPlus.isEmpty() ? c : scanPlus.get(scanPlus.size() - 1)[1];
-                        failTexts[boundaryR][boundaryC] = "End of board"; // Fixed: Always visible on Step 3 wall failures
+                        failTexts[boundaryR][boundaryC] = "End of board"; 
                     }
                     
                     if (termMinusOnBoard) {
@@ -2366,15 +2083,14 @@ public class OthelloGUI extends JFrame {
                                 failMarkers[termMinusR][termMinusC] = "X";
                             }
                         } else if (mPiece == currentPlayer) {
-                            failTexts[termMinusR][termMinusC] = "Own Piece"; // Colored Red automatically (Value 4)
+                            failTexts[termMinusR][termMinusC] = "Own Piece"; 
                         }
                     } else {
                         int boundaryR = scanMinus.isEmpty() ? r : scanMinus.get(scanMinus.size() - 1)[0];
                         int boundaryC = scanMinus.isEmpty() ? c : scanMinus.get(scanMinus.size() - 1)[1];
-                        failTexts[boundaryR][boundaryC] = "End of board"; // Fixed: Always visible on Step 3 wall failures
+                        failTexts[boundaryR][boundaryC] = "End of board"; 
                     }
 
-                    // Trace arrows
                     int tempR = r;
                     int tempC = c;
                     while (tempR != termPlusR || tempC != termPlusC) {
@@ -2396,7 +2112,6 @@ public class OthelloGUI extends JFrame {
                         tempC -= dc;
                     }
 
-                    // Add vector edge boundary wall red cross indicator safely declared
                     VizState failState;
                     if (!termPlusOnBoard) {
                         int boundaryR = scanPlus.isEmpty() ? r : scanPlus.get(scanPlus.size() - 1)[0];
@@ -2423,7 +2138,6 @@ public class OthelloGUI extends JFrame {
             }
         }
 
-        // Final Frame: Shows all validated squares
         clearArray(curHighlights);
         String[][] finalMarkers = new String[8][8];
         String[][] finalTexts = new String[8][8];
@@ -2431,7 +2145,7 @@ public class OthelloGUI extends JFrame {
             for (int c = 0; c < 8; c++) {
                 if (game.getPieceAt(r, c) == EMPTY) {
                     if (persistentValids[r][c]) {
-                        curHighlights[r][c] = 3; // Green (Valid)
+                        curHighlights[r][c] = 3; 
                         finalMarkers[r][c] = "✓";
                         finalTexts[r][c] = "Valid";
                     }
@@ -2446,8 +2160,7 @@ public class OthelloGUI extends JFrame {
         vizHistory.add(finalState);
     }
 
-// Frame-by-Frame OO Scan Generator with Chronological Touch Paths & Multi-outcome checking (With Preserved Red Opponents)
-    private void generateOOHistory() {
+    private void generateOOHistoryFrontier() {
         vizHistory.clear();
         historyIndex = -1;
 
@@ -2455,7 +2168,6 @@ public class OthelloGUI extends JFrame {
         boolean[][] persistentValids = new boolean[8][8];
         boolean[][] persistentInvalids = new boolean[8][8];
         
-        // Map out which search targets will be checked overall in OO neighbor evaluations
         boolean[][] willBeExplored = new boolean[8][8];
         int opponent = (currentPlayer == BLACK) ? WHITE : BLACK;
 
@@ -2478,13 +2190,11 @@ public class OthelloGUI extends JFrame {
         boolean[][] evaluated = new boolean[8][8];
         boolean[][] checked = new boolean[8][8]; 
 
-        // SEQUENTIAL TRAVERSAL OUTER SWEEP
         for (int r = 0; r < 8; r++) {
             for (int c = 0; c < 8; c++) {
                 String cellName = OthelloBitboard.indexToAlgebraic(r * 8 + c);
                 int pieceAtCell = game.getPieceAt(r, c);
 
-                // Create a brief sequential scan sweep frame
                 clearArray(curHighlights);
                 applyOOCandidateHighlights(curHighlights, new String[8][8], new String[8][8], evaluated, persistentValids, persistentInvalids, -1, -1, false);
                 curHighlights[r][c] = 2; // Yellow active scan cursor
@@ -2511,7 +2221,6 @@ public class OthelloGUI extends JFrame {
                     continue; 
                 }
 
-                // Check 8 neighbors of this opponent piece (Frontier search)
                 for (int d = 0; d < 8; d++) {
                     int nr = r + DR[d];
                     int nc = c + DC[d];
@@ -2522,17 +2231,15 @@ public class OthelloGUI extends JFrame {
                     int neighborPiece = game.getPieceAt(nr, nc);
                     if (neighborPiece != EMPTY || checked[nr][nc]) continue;
 
-                    checked[nr][nc] = true; // Prevents duplicate scans
+                    checked[nr][nc] = true; 
                     String posName = OthelloBitboard.indexToAlgebraic(nr * 8 + nc);
 
-                    // Track temporary empty spot failures across directional evaluations for this specific candidate square
                     boolean[][] currentSpaceInvalids = new boolean[8][8];
                     boolean[][] currentSpaceFailedOpponents = new boolean[8][8];
                     List<int[]> currentSquareArrows = new ArrayList<>();
                     String[][] currentSquareMarkers = new String[8][8];
                     String[][] currentSquareTexts = new String[8][8];
 
-                    // Start examining this empty neighbor: Blue ("Evaluating") with "?" marker
                     clearArray(curHighlights);
                     applyOOCandidateHighlights(curHighlights, currentSquareTexts, currentSquareMarkers, evaluated, 
                                                persistentValids, persistentInvalids, nr, nc, true);
@@ -2545,7 +2252,6 @@ public class OthelloGUI extends JFrame {
                     boolean cellIsIndeedValid = false;
 
                     for (int scanDir = 0; scanDir < 8; scanDir++) {
-                        // Early Exit once confirmed Valid
                         if (cellIsIndeedValid) {
                             break; 
                         }
@@ -2558,31 +2264,27 @@ public class OthelloGUI extends JFrame {
                         int currC = nc + sdc;
                         int step = 1;
 
-                        // Check for wall boundaries or immediate adjacent empty spots before initiating the opponent search
                         if (currR < 0 || currR >= 8 || currC < 0 || currC >= 8) {
-                            // Boundary wall hit immediately
                         } else {
                             int targetPiece = game.getPieceAt(currR, currC);
                             if (targetPiece == EMPTY) {
                                 boolean isAlreadyValid = persistentValids[currR][currC];
                                 
-                                // Register transient failures first to ensure synchronous rendering
                                 currentSpaceInvalids[currR][currC] = true;
-                                currentSquareArrows.add(new int[]{nr, nc, currR, currC, 2}); // Red failure arrow
+                                currentSquareArrows.add(new int[]{nr, nc, currR, currC, 2}); 
 
                                 if (isAlreadyValid) {
                                     currentSquareMarkers[currR][currC] = "✓";
                                     currentSquareTexts[currR][currC] = "Valid";
                                 } else {
                                     currentSquareMarkers[currR][currC] = "X";
-                                    currentSquareTexts[currR][currC] = "Empty";
+                                    currentSquareTexts[currR][currC] = "Invalid";
                                 }
                                 
                                 clearArray(curHighlights);
                                 applyOOCandidateHighlights(curHighlights, currentSquareTexts, currentSquareMarkers, evaluated, 
                                                            persistentValids, persistentInvalids, nr, nc, true);
                                 
-                                // Apply transient highlights, crosses, and labels (safely captures failed opponents as well)
                                 applyTransientOverlay(curHighlights, currentSquareMarkers, currentSquareTexts, 
                                                       currentSpaceInvalids, currentSpaceFailedOpponents,
                                                       currentSquareMarkers, currentSquareTexts,
@@ -2597,7 +2299,6 @@ public class OthelloGUI extends JFrame {
                                 copyStringArray(currentSquareMarkers, state.markers);
                                 copyStringArray(currentSquareTexts, state.tileTexts);
                                 
-                                // Apply crosses and text markers to our transient list for this frame
                                 applyTransientOverlay(curHighlights, state.markers, state.tileTexts, 
                                                       currentSpaceInvalids, currentSpaceFailedOpponents,
                                                       currentSquareMarkers, currentSquareTexts,
@@ -2607,12 +2308,12 @@ public class OthelloGUI extends JFrame {
                                 state.markers[nr][nc] = "?";
                                 state.arrows.addAll(cloneArrows(currentSquareArrows));
                                 vizHistory.add(state);
-                                continue; // Path is dead, proceed immediately to next direction
+                                continue; 
                             }
                         }
 
                         List<int[]> scannedOpponents = new ArrayList<>();
-                        List<int[]> currentDirArrows = new ArrayList<>(); // Temporary active direction arrows
+                        List<int[]> currentDirArrows = new ArrayList<>(); 
 
                         while (currR >= 0 && currR < 8 && currC >= 0 && currC < 8 && game.getPieceAt(currR, currC) == opponent) {
                             scannedOpponents.add(new int[]{currR, currC});
@@ -2621,14 +2322,13 @@ public class OthelloGUI extends JFrame {
                             applyOOCandidateHighlights(curHighlights, currentSquareTexts, currentSquareMarkers, evaluated, 
                                                        persistentValids, persistentInvalids, nr, nc, true);
                             
-                            // Apply transient highlights, crosses, and labels
                             applyTransientOverlay(curHighlights, currentSquareMarkers, currentSquareTexts, 
                                                   currentSpaceInvalids, currentSpaceFailedOpponents,
                                                   currentSquareMarkers, currentSquareTexts,
                                                   evaluated, persistentValids, persistentInvalids);
                             
                             for (int[] p : scannedOpponents) {
-                                curHighlights[p[0]][p[1]] = 2; // Yellow opponent
+                                curHighlights[p[0]][p[1]] = 2; 
                             }
                             
                             VizState state = new VizState(nr, nc, scanDir, step, persistentValids, persistentInvalids, curHighlights, 
@@ -2638,7 +2338,6 @@ public class OthelloGUI extends JFrame {
                             copyStringArray(currentSquareMarkers, state.markers);
                             copyStringArray(currentSquareTexts, state.tileTexts);
                             
-                            // Restore transient invalid markings on frame safely without NullPointerExceptions
                             applyTransientOverlay(curHighlights, state.markers, state.tileTexts, 
                                                   currentSpaceInvalids, currentSpaceFailedOpponents,
                                                   currentSquareMarkers, currentSquareTexts,
@@ -2653,7 +2352,7 @@ public class OthelloGUI extends JFrame {
                             
                             int prevR = currR - sdr;
                             int prevC = currC - sdc;
-                            currentDirArrows.add(new int[]{prevR, prevC, currR, currC, 1}); // Yellow arrow
+                            currentDirArrows.add(new int[]{prevR, prevC, currR, currC, 1}); 
                             
                             state.arrows.addAll(cloneArrows(currentSquareArrows));
                             state.arrows.addAll(cloneArrows(currentDirArrows));
@@ -2665,27 +2364,25 @@ public class OthelloGUI extends JFrame {
                             step++;
                         }
 
-                        // Check completion
                         if (currR >= 0 && currR < 8 && currC >= 0 && currC < 8 && game.getPieceAt(currR, currC) == currentPlayer) {
                             if (step > 1) {
                                 cellIsIndeedValid = true;
                                 evaluated[nr][nc] = true;
-                                persistentValids[nr][nc] = true; // Retain validation permanently
+                                persistentValids[nr][nc] = true; 
 
                                 clearArray(curHighlights);
                                 applyOOCandidateHighlights(curHighlights, currentSquareTexts, currentSquareMarkers, evaluated, 
                                                            persistentValids, persistentInvalids, nr, nc, false);
 
-                                // Keep empty space failures and failed opponents highlighted red
                                 applyTransientOverlay(curHighlights, currentSquareMarkers, currentSquareTexts, 
                                                       currentSpaceInvalids, currentSpaceFailedOpponents,
                                                       currentSquareMarkers, currentSquareTexts,
                                                       evaluated, persistentValids, persistentInvalids);
 
                                 for (int[] p : scannedOpponents) {
-                                    curHighlights[p[0]][p[1]] = 3; // Captured green
+                                    curHighlights[p[0]][p[1]] = 3; 
                                 }
-                                curHighlights[currR][currC] = 3; // Friendly anchor green
+                                curHighlights[currR][currC] = 3; 
                                 
                                 VizState state = new VizState(nr, nc, scanDir, step, persistentValids, persistentInvalids, curHighlights, 
                                         String.format("[%s] Friendly anchor found at %s! Valid line confirmed.", 
@@ -2694,14 +2391,14 @@ public class OthelloGUI extends JFrame {
                                 state.tileTexts[nr][nc] = "Valid";
                                 
                                 for (int[] arrow : currentDirArrows) {
-                                    arrow[4] = 3; // Change to Green
+                                    arrow[4] = 3; 
                                 }
                                 currentSquareArrows.addAll(currentDirArrows);
 
                                 int tempR = nr;
                                 int tempC = nc;
                                 while (tempR != currR || tempC != currC) {
-                                    currentSquareArrows.add(new int[]{tempR, tempC, tempR + sdr, tempC + sdc, 3}); // Green
+                                    currentSquareArrows.add(new int[]{tempR, tempC, tempR + sdr, tempC + sdc, 3}); 
                                     tempR += sdr;
                                     tempC += sdc;
                                 }
@@ -2712,7 +2409,6 @@ public class OthelloGUI extends JFrame {
                                 copyStringArray(currentSquareMarkers, state.markers);
                                 copyStringArray(currentSquareTexts, state.tileTexts);
                                 
-                                // Restore crosses and labels
                                 applyTransientOverlay(curHighlights, state.markers, state.tileTexts, 
                                                       currentSpaceInvalids, currentSpaceFailedOpponents,
                                                       currentSquareMarkers, currentSquareTexts,
@@ -2721,17 +2417,15 @@ public class OthelloGUI extends JFrame {
                                 state.arrows.addAll(cloneArrows(currentSquareArrows));
                                 vizHistory.add(state);
                             } else {
-                                // Step is 1, adjacent is own friendly piece ("Own Piece")
                                 currentSpaceInvalids[currR][currC] = true;
                                 currentSquareMarkers[currR][currC] = "X";
                                 currentSquareTexts[currR][currC] = "Own Piece";
-                                currentSquareArrows.add(new int[]{nr, nc, currR, currC, 2}); // Red arrow
+                                currentSquareArrows.add(new int[]{nr, nc, currR, currC, 2}); 
                                 
                                 clearArray(curHighlights);
                                 applyOOCandidateHighlights(curHighlights, currentSquareTexts, currentSquareMarkers, evaluated, 
                                                            persistentValids, persistentInvalids, nr, nc, true);
                                 
-                                // Apply transient highlights, crosses, and labels safely
                                 applyTransientOverlay(curHighlights, currentSquareMarkers, currentSquareTexts, 
                                                       currentSpaceInvalids, currentSpaceFailedOpponents,
                                                       currentSquareMarkers, currentSquareTexts,
@@ -2749,8 +2443,8 @@ public class OthelloGUI extends JFrame {
                                                       currentSquareMarkers, currentSquareTexts,
                                                       evaluated, persistentValids, persistentInvalids);
 
-                                state.tileTexts[nr][nc] = "Evaluating"; // Keeps "Evaluating" text active
-                                state.markers[nr][nc] = "?"; // Keeps "?" active
+                                state.tileTexts[nr][nc] = "Evaluating"; 
+                                state.markers[nr][nc] = "?"; 
                                 state.arrows.addAll(cloneArrows(currentSquareArrows));
                                 vizHistory.add(state);
                             }
@@ -2758,7 +2452,6 @@ public class OthelloGUI extends JFrame {
                             if (!scannedOpponents.isEmpty()) {
                                 boolean isAlreadyValid = (currR >= 0 && currR < 8 && currC >= 0 && currC < 8) && persistentValids[currR][currC];
                                 
-                                // Register transient failures first to ensure synchronous rendering
                                 currentSpaceInvalids[currR][currC] = true;
                                 if (isAlreadyValid) {
                                     currentSquareMarkers[currR][currC] = "✓";
@@ -2771,12 +2464,11 @@ public class OthelloGUI extends JFrame {
                                 int tempR = nr;
                                 int tempC = nc;
                                 while (tempR != currR || tempC != currC) {
-                                    currentSquareArrows.add(new int[]{tempR, tempC, tempR + sdr, tempC + sdc, 2}); // Red Arrow
+                                    currentSquareArrows.add(new int[]{tempR, tempC, tempR + sdr, tempC + sdc, 2}); 
                                     tempR += sdr;
                                     tempC += sdc;
                                 }
                                 
-                                // Track failed path opponents so they remain highlighted
                                 for (int[] p : scannedOpponents) {
                                     currentSpaceFailedOpponents[p[0]][p[1]] = true;
                                 }
@@ -2785,7 +2477,6 @@ public class OthelloGUI extends JFrame {
                                 applyOOCandidateHighlights(curHighlights, currentSquareTexts, currentSquareMarkers, evaluated, 
                                                            persistentValids, persistentInvalids, nr, nc, true);
                                 
-                                // Apply transient highlights, crosses, and labels
                                 applyTransientOverlay(curHighlights, currentSquareMarkers, currentSquareTexts, 
                                                       currentSpaceInvalids, currentSpaceFailedOpponents,
                                                       currentSquareMarkers, currentSquareTexts,
@@ -2796,7 +2487,7 @@ public class OthelloGUI extends JFrame {
                                 int failedTargetC = currC;
                                 
                                 for (int[] arrow : currentDirArrows) {
-                                    arrow[4] = 2; // Red
+                                    arrow[4] = 2; 
                                 }
                                 currentSquareArrows.addAll(currentDirArrows);
 
@@ -2808,7 +2499,6 @@ public class OthelloGUI extends JFrame {
                                     applyOOCandidateHighlights(curHighlights, currentSquareTexts, currentSquareMarkers, evaluated, 
                                                                persistentValids, persistentInvalids, nr, nc, true);
                                     
-                                    // Highlight transient failures
                                     applyTransientOverlay(curHighlights, currentSquareMarkers, currentSquareTexts, 
                                                           currentSpaceInvalids, currentSpaceFailedOpponents,
                                                           currentSquareMarkers, currentSquareTexts,
@@ -2820,10 +2510,10 @@ public class OthelloGUI extends JFrame {
                                     currentSquareMarkers[failedTargetR][failedTargetC] = "X"; 
                                     currentSquareTexts[failedTargetR][failedTargetC] = "End of board";
                                     
-                                    int tr = nr;
-                                    int tc = nc;
+                                    int tr = nr; // Fixed: using nr
+                                    int tc = nc; // Fixed: using nc
                                     while (tr != failedTargetR || tc != failedTargetC) {
-                                        currentSquareArrows.add(new int[]{tr, tc, tr + sdr, tc + sdc, 2}); // Red
+                                        currentSquareArrows.add(new int[]{tr, tc, tr + sdr, tc + sdc, 2}); 
                                         tr += sdr;
                                         tc += sdc;
                                     }
@@ -2864,16 +2554,13 @@ public class OthelloGUI extends JFrame {
                         }
                     }
 
-                    // Once all 8 directions are fully checked without validation, evaluate immediately as Invalid
                     if (!cellIsIndeedValid) {
                         evaluated[nr][nc] = true;
-                        persistentInvalids[nr][nc] = true; // Mark as permanently invalid on this board state
+                        persistentInvalids[nr][nc] = true; 
 
                         clearArray(curHighlights);
                         String[][] cleanMarkers = new String[8][8];
                         String[][] cleanTexts = new String[8][8];
-                        
-                        // Generates only board-persistent values, wiping transient checking lines/crosses
                         applyOOCandidateHighlights(curHighlights, cleanTexts, cleanMarkers, evaluated, 
                                                    persistentValids, persistentInvalids, nr, nc, false);
 
@@ -2883,14 +2570,12 @@ public class OthelloGUI extends JFrame {
                         copyStringArray(cleanMarkers, invalidState.markers);
                         copyStringArray(cleanTexts, invalidState.tileTexts);
                         
-                        // Active transient arrows are left clean
                         vizHistory.add(invalidState);
                     }
                 }
             }
         }
         
-        // Final Frame: Shows all validated squares, and marks evaluated failed neighbor squares as "Invalid"
         clearArray(curHighlights);
         String[][] finalMarkers = new String[8][8];
         String[][] finalTexts = new String[8][8];
@@ -2898,13 +2583,12 @@ public class OthelloGUI extends JFrame {
             for (int c = 0; c < 8; c++) {
                 if (game.getPieceAt(r, c) == EMPTY) {
                     if (persistentValids[r][c]) {
-                        curHighlights[r][c] = 3; // Green (Valid)
+                        curHighlights[r][c] = 3; 
                         finalMarkers[r][c] = "✓";
                         finalTexts[r][c] = "Valid";
                     } else {
-                        // Marks only the evaluated adjacent neighbors that actually failed as "Invalid"
                         if (checked[r][c]) {
-                            curHighlights[r][c] = 4; // Red (Invalid)
+                            curHighlights[r][c] = 4; 
                             finalTexts[r][c] = "Invalid";
                             finalMarkers[r][c] = "X";
                         }
@@ -2920,392 +2604,424 @@ public class OthelloGUI extends JFrame {
         vizHistory.add(finalState);
     }
 
-private void generateBitboardHistory() {
+    private void applyOOCandidateHighlights(int[][] curHighlights, String[][] tileTexts, String[][] markers,
+                                            boolean[][] evaluated,
+                                            boolean[][] persistentValids, boolean[][] persistentInvalids,
+                                            int nr, int nc, boolean isCurrentlyEvaluating) {
+        for (int r = 0; r < 8; r++) {
+            for (int c = 0; c < 8; c++) {
+                if (r == nr && c == nc && isCurrentlyEvaluating) {
+                    curHighlights[r][c] = 1; 
+                    tileTexts[r][c] = "Evaluating";
+                    markers[r][c] = "?"; 
+                } else if (evaluated[r][c]) {
+                    if (persistentValids[r][c]) {
+                        curHighlights[r][c] = 3; 
+                        tileTexts[r][c] = "Valid";
+                        markers[r][c] = "✓";
+                    } else if (persistentInvalids[r][c]) {
+                        curHighlights[r][c] = 4; 
+                        tileTexts[r][c] = "Invalid";
+                        markers[r][c] = "X";
+                    }
+                } else {
+                    curHighlights[r][c] = 0; 
+                    if (tileTexts[r][c] != null && (tileTexts[r][c].equals("Own Piece") || tileTexts[r][c].equals("Empty") || tileTexts[r][c].equals("Valid") || tileTexts[r][c].equals("Invalid") || tileTexts[r][c].equals("End of board") || tileTexts[r][c].equals("Edge of board"))) {
+                    } else {
+                        tileTexts[r][c] = ""; 
+                    }
+                    if (markers[r][c] != null && (markers[r][c].equals("X") || markers[r][c].equals("✓") || markers[r][c].equals("?"))) {
+                    } else {
+                        markers[r][c] = null;
+                    }
+                }
+            }
+        }
+    }
+
+    private void generateOOHistoryPrimitive() {
         vizHistory.clear();
         historyIndex = -1;
 
         int[][] curHighlights = new int[8][8];
-        boolean[][] persistentValids = new boolean[8][8]; 
-        boolean[][] persistentInvalids = new boolean[8][8]; 
-        boolean[][] checked = new boolean[8][8]; // Tracks checked empty squares
+        boolean[][] persistentValids = new boolean[8][8];
+        boolean[][] persistentInvalids = new boolean[8][8];
+        boolean[][] evaluated = new boolean[8][8];
 
         int opponent = (currentPlayer == BLACK) ? WHITE : BLACK;
 
-        for (int d = 0; d < 8; d++) {
-            int dr = DR[d];
-            int dc = DC[d];
-            String dirName = DIR_NAMES[d];
+        for (int r = 0; r < 8; r++) {
+            for (int c = 0; c < 8; c++) {
+                String cellName = OthelloBitboard.indexToAlgebraic(r * 8 + c);
+                int pieceAtCell = game.getPieceAt(r, c);
 
-            // Precompute immediate invalid empty spaces right next to friendly pieces in direction d
-            boolean[][] dirInvalids = new boolean[8][8];
-            for (int r = 0; r < 8; r++) {
-                for (int c = 0; c < 8; c++) {
-                    if (game.getPieceAt(r, c) == EMPTY) {
-                        int prevR = r - dr;
-                        int prevC = c - dc;
-                        if (prevR >= 0 && prevR < 8 && prevC >= 0 && prevC < 8) {
-                            if (game.getPieceAt(prevR, prevC) == currentPlayer) dirInvalids[r][c] = true;
-                        }
-                    }
+                clearArray(curHighlights);
+                applyOOCandidateHighlights(curHighlights, new String[8][8], new String[8][8], evaluated, persistentValids, persistentInvalids, -1, -1, false);
+                curHighlights[r][c] = 2; // Yellow active sweep cursor
+                
+                String sweepExplanation;
+                if (pieceAtCell == EMPTY) {
+                    sweepExplanation = String.format("Scanning board... %s is empty. Evaluating in 8 directions.", cellName);
+                } else if (pieceAtCell == currentPlayer) {
+                    sweepExplanation = String.format("Scanning board... %s contains Own Piece. Skipping.", cellName);
+                } else {
+                    sweepExplanation = String.format("Scanning board... %s contains Opponent Piece. Skipping.", cellName);
                 }
-            }
 
-            // --- Step 0: Identify active friendly pieces & tiles to be evaluated ---
-            clearArray(curHighlights);
-            String[][] step0Texts = new String[8][8];
-            String[][] step0Markers = new String[8][8];
-            
-            // Highlight own friendly pieces as Purple
-            for (int r = 0; r < 8; r++) {
-                for (int c = 0; c < 8; c++) {
-                    if (game.getPieceAt(r, c) == currentPlayer) {
-                        curHighlights[r][c] = 6; // Purple (Own Piece / Source)
-                    }
+                VizState sweepState = new VizState(-1, -1, -1, 0, persistentValids, persistentInvalids, curHighlights, sweepExplanation);
+                String[][] sweepTexts = new String[8][8];
+                String[][] sweepMarkers = new String[8][8];
+                applyOOCandidateHighlights(curHighlights, sweepTexts, sweepMarkers, evaluated, persistentValids, persistentInvalids, -1, -1, false);
+                curHighlights[r][c] = 2;
+                sweepState.setTileTexts(sweepTexts);
+                sweepState.setMarkers(sweepMarkers);
+                vizHistory.add(sweepState);
+
+                if (pieceAtCell != EMPTY) {
+                    continue;
                 }
-            }
 
-            // Highlight own pieces together with empty tiles that will be evaluated in direction d
-            for (int r = 0; r < 8; r++) {
-                for (int c = 0; c < 8; c++) {
-                    boolean isCandidate = isPotentialBitboardTarget(r, c, currentPlayer, d) || dirInvalids[r][c];
-                    if (isCandidate) {
-                        curHighlights[r][c] = 1; // Turquoise (Evaluating)
-                        if (persistentValids[r][c]) {
-                            step0Texts[r][c] = "Valid"; // Retains "Valid" text on re-evaluation
-                            step0Markers[r][c] = "✓";
-                        } else {
-                            step0Texts[r][c] = "Evaluating";
-                            step0Markers[r][c] = "?"; // Active candidate displays "?"
-                        }
+                boolean cellIsIndeedValid = false; // Declared cleanly inside the loop scope
+                boolean[][] currentSpaceInvalids = new boolean[8][8];
+                boolean[][] currentSpaceFailedOpponents = new boolean[8][8];
+                List<int[]> currentSquareArrows = new ArrayList<>();
+                String[][] currentSquareMarkers = new String[8][8];
+                String[][] currentSquareTexts = new String[8][8];
+
+                clearArray(curHighlights);
+                applyOOCandidateHighlights(curHighlights, currentSquareTexts, currentSquareMarkers, evaluated, 
+                                           persistentValids, persistentInvalids, r, c, true);
+                
+                VizState neighborState = new VizState(r, c, -1, 0, persistentValids, persistentInvalids, curHighlights, "Evaluating candidate " + cellName);
+                neighborState.setTileTexts(currentSquareTexts);
+                neighborState.setMarkers(currentSquareMarkers);
+                vizHistory.add(neighborState);
+
+                for (int scanDir = 0; scanDir < 8; scanDir++) {
+                    if (cellIsIndeedValid) {
+                        break; 
+                    }
+
+                    int sdr = DR[scanDir];
+                    int sdc = DC[scanDir];
+                    String scanDirName = DIR_NAMES[scanDir];
+
+                    int currR = r + sdr;
+                    int currC = c + sdc;
+                    int step = 1;
+
+                    if (currR < 0 || currR >= 8 || currC < 0 || currC >= 8) {
+                        // Wall
                     } else {
-                        // Render non-candidates with their pre-existing resolved status
-                        if (persistentValids[r][c]) {
-                            curHighlights[r][c] = 3; // Green (Valid)
-                            step0Texts[r][c] = "Valid";
-                            step0Markers[r][c] = "✓";
-                        } else if (persistentInvalids[r][c]) {
-                            curHighlights[r][c] = 4; // Red (Invalid)
-                            step0Texts[r][c] = "Invalid";
-                            step0Markers[r][c] = "X";
-                        }
-                    }
-                }
-            }
-            
-            VizState step0State = new VizState(-1, -1, d, 0, persistentValids, persistentInvalids, curHighlights, 
-                    String.format("[Bitboard] Step 0: Identify own pieces and evaluation candidates in direction %s", dirName));
-            step0State.setTileTexts(step0Texts);
-            step0State.setMarkers(step0Markers);
-            vizHistory.add(step0State);
+                        int targetPiece = game.getPieceAt(currR, currC);
+                        if (targetPiece == EMPTY) {
+                            boolean isAlreadyValid = persistentValids[currR][currC];
+                            currentSpaceInvalids[currR][currC] = true;
+                            currentSquareArrows.add(new int[]{r, c, currR, currC, 2}); 
 
-            // --- Step 1: Shift friendly board by 1 & Mark immediate empty spaces as Invalid ---
-            clearArray(curHighlights);
-            String[][] step1Texts = new String[8][8];
-            String[][] step1Markers = new String[8][8];
-            List<int[]> step1Arrows = new ArrayList<>();
-            List<int[]> step1WallHits = new ArrayList<>();
-
-            // Preserve Purple Highlights for own friendly pieces
-            for (int r = 0; r < 8; r++) {
-                for (int c = 0; c < 8; c++) {
-                    if (game.getPieceAt(r, c) == currentPlayer) {
-                        curHighlights[r][c] = 6; 
-                    }
-                }
-            }
-
-            // Other candidates that are not immediate invalids remain "Evaluating" (Blue/Turquoise) or "Valid"
-            for (int r = 0; r < 8; r++) {
-                for (int c = 0; c < 8; c++) {
-                    boolean isCandidate = isPotentialBitboardTarget(r, c, currentPlayer, d) || dirInvalids[r][c];
-                    if (isCandidate && !dirInvalids[r][c]) {
-                        if (persistentValids[r][c]) {
-                            curHighlights[r][c] = 1; // Remain Turquoise
-                            step1Texts[r][c] = "Valid"; // Retains "Valid" text on re-evaluation
-                            step1Markers[r][c] = "✓"; // Keep its checkmark
-                        } else {
-                            curHighlights[r][c] = 1; 
-                            step1Texts[r][c] = "Evaluating";
-                            step1Markers[r][c] = "?";
-                        }
-                    } else if (!isCandidate) {
-                        if (persistentValids[r][c]) {
-                            curHighlights[r][c] = 3;
-                            step1Texts[r][c] = "Valid";
-                            step1Markers[r][c] = "✓";
-                        } else if (persistentInvalids[r][c]) {
-                            curHighlights[r][c] = 4;
-                            step1Texts[r][c] = "Invalid";
-                            step1Markers[r][c] = "X";
-                        }
-                    }
-                }
-            }
-
-            // Shift board by 1 position
-            for (int r = 0; r < 8; r++) {
-                for (int c = 0; c < 8; c++) {
-                    int prevR = r - dr;
-                    int prevC = c - dc;
-                    if (prevR >= 0 && prevR < 8 && prevC >= 0 && prevC < 8) {
-                        if (game.getPieceAt(prevR, prevC) == currentPlayer) {
-                            int destPiece = game.getPieceAt(r, c);
-                            if (destPiece == EMPTY) {
-                                // Landing immediately on empty space -> Red/Invalid (or Red if already Valid)
-                                if (persistentValids[r][c]) {
-                                    curHighlights[r][c] = 4; // Highlighted Red ONLY in Step 1
-                                    step1Texts[r][c] = "Valid"; // Retains "Valid" text
-                                    step1Markers[r][c] = "✓"; // Keep its checkmark
-                                } else {
-                                    curHighlights[r][c] = 4; // Red (Failed path)
-                                    step1Texts[r][c] = "Invalid";
-                                    step1Markers[r][c] = "X"; // Only draw X if not already valid
-                                }
-                                step1Arrows.add(new int[]{prevR, prevC, r, c, 2}); // Red arrow represents vector check failure
-                                checked[r][c] = true;
-                            } else if (destPiece == opponent) {
-                                // Landing on opponent -> Capturable candidate!
-                                curHighlights[r][c] = 5; // Orange (Shifted/Capturable)
-                                step1Markers[r][c] = "✓";
-                                step1Arrows.add(new int[]{prevR, prevC, r, c, 1}); // Yellow shifting arrow
-                            } else if (destPiece == currentPlayer) {
-                                // Landed on friendly own piece
-                                curHighlights[r][c] = 4; 
-                                step1Markers[r][c] = "X";
-                                step1Texts[r][c] = "Own Piece"; // Add "Own Piece" text label on friendly alignment
-                                step1Arrows.add(new int[]{prevR, prevC, r, c, 2}); // Red arrow
-                            }
-                        }
-                    }
-                    
-                    if (game.getPieceAt(r, c) == currentPlayer) {
-                        int nextR = r + dr;
-                        int nextC = c + dc;
-                        if (nextR < 0 || nextR >= 8 || nextC < 0 || nextC >= 8) {
-                            curHighlights[r][c] = 4; 
-                            step1WallHits.add(new int[]{r, c, r, c, nextR, nextC});
-                            step1Texts[r][c] = "End of board";
-                        }
-                    }
-                }
-            }
-
-            VizState step1State = new VizState(-1, -1, d, 1, persistentValids, persistentInvalids, curHighlights, String.format("[Bitboard] Step 1: Shift friendly board by 1 position in direction %s", dirName));
-            step1State.setTileTexts(step1Texts);
-            step1State.setMarkers(step1Markers);
-            step1State.arrows = step1Arrows;
-            step1State.wallHits = step1WallHits;
-            vizHistory.add(step1State);
-
-            // --- Step 2: Mask opponent pieces recursively in a chain ---
-            clearArray(curHighlights);
-            String[][] step2Texts = new String[8][8];
-            String[][] step2Markers = new String[8][8];
-            List<int[]> step2Arrows = new ArrayList<>();
-
-            // Preserve Purple own pieces
-            for (int r = 0; r < 8; r++) {
-                for (int c = 0; c < 8; c++) {
-                    if (game.getPieceAt(r, c) == currentPlayer) {
-                        curHighlights[r][c] = 6; 
-                    }
-                }
-            }
-
-            // Keep Step 1's immediate invalid empty spaces marked Red (or revert back to Green if already valid)
-            for (int r = 0; r < 8; r++) {
-                for (int c = 0; c < 8; c++) {
-                    if (dirInvalids[r][c]) {
-                        if (persistentValids[r][c]) {
-                            curHighlights[r][c] = 3; // Reverted back to Green (3) for Step 2
-                            step2Texts[r][c] = "Valid"; // Retains "Valid" text
-                            step2Markers[r][c] = "✓"; // Keep its checkmark
-                        } else {
-                            curHighlights[r][c] = 4; // Red
-                            step2Texts[r][c] = "Invalid";
-                            step2Markers[r][c] = "X";
-                        }
-                    } else {
-                        boolean isCandidate = isPotentialBitboardTarget(r, c, currentPlayer, d);
-                        if (isCandidate) {
-                            if (persistentValids[r][c]) {
-                                curHighlights[r][c] = 1; // Remain Turquoise
-                                step2Texts[r][c] = "Valid"; // Retains "Valid" text
-                                step2Markers[r][c] = "✓";
+                            if (isAlreadyValid) {
+                                currentSquareMarkers[currR][currC] = "✓";
+                                currentSquareTexts[currR][currC] = "Valid";
                             } else {
-                                curHighlights[r][c] = 1; 
-                                step2Texts[r][c] = "Evaluating";
-                                step2Markers[r][c] = "?";
+                                currentSquareMarkers[currR][currC] = "X";
+                                currentSquareTexts[currR][currC] = "Invalid";
                             }
-                        } else {
-                            if (persistentValids[r][c]) {
-                                curHighlights[r][c] = 3;
-                                step2Texts[r][c] = "Valid";
-                                step2Markers[r][c] = "✓";
-                            } else if (persistentInvalids[r][c]) {
-                                curHighlights[r][c] = 4;
-                                step2Texts[r][c] = "Invalid";
-                                step2Markers[r][c] = "X";
-                            }
+                            
+                            clearArray(curHighlights);
+                            applyOOCandidateHighlights(curHighlights, currentSquareTexts, currentSquareMarkers, evaluated, 
+                                                       persistentValids, persistentInvalids, r, c, true);
+                            
+                            applyTransientOverlay(curHighlights, currentSquareMarkers, currentSquareTexts, 
+                                                  currentSpaceInvalids, currentSpaceFailedOpponents,
+                                                  currentSquareMarkers, currentSquareTexts,
+                                                  evaluated, persistentValids, persistentInvalids);
+
+                            String explanationText = isAlreadyValid 
+                                ? String.format("[%s] Path failed (Adjacent cell %s is an empty valid position).", scanDirName, OthelloBitboard.indexToAlgebraic(currR * 8 + currC))
+                                : String.format("[%s] Path failed (Adjacent cell %s is empty).", scanDirName, OthelloBitboard.indexToAlgebraic(currR * 8 + currC));
+
+                            VizState state = new VizState(r, c, scanDir, 1, persistentValids, persistentInvalids, curHighlights, explanationText);
+                            
+                            copyStringArray(currentSquareMarkers, state.markers);
+                            copyStringArray(currentSquareTexts, state.tileTexts);
+                            
+                            applyTransientOverlay(curHighlights, state.markers, state.tileTexts, 
+                                                  currentSpaceInvalids, currentSpaceFailedOpponents,
+                                                  currentSquareMarkers, currentSquareTexts,
+                                                  evaluated, persistentValids, persistentInvalids);
+
+                            state.tileTexts[r][c] = "Evaluating";
+                            state.markers[r][c] = "?";
+                            state.arrows.addAll(cloneArrows(currentSquareArrows));
+                            vizHistory.add(state);
+                            continue;
+                        } else if (targetPiece == currentPlayer) {
+                            currentSpaceInvalids[currR][currC] = true;
+                            currentSquareMarkers[currR][currC] = "X";
+                            currentSquareTexts[currR][currC] = "Own Piece";
+                            currentSquareArrows.add(new int[]{r, c, currR, currC, 2}); 
+                            
+                            clearArray(curHighlights);
+                            applyOOCandidateHighlights(curHighlights, currentSquareTexts, currentSquareMarkers, evaluated, 
+                                                       persistentValids, persistentInvalids, r, c, true);
+                            
+                            applyTransientOverlay(curHighlights, currentSquareMarkers, currentSquareTexts, 
+                                                  currentSpaceInvalids, currentSpaceFailedOpponents,
+                                                  currentSquareMarkers, currentSquareTexts,
+                                                  evaluated, persistentValids, persistentInvalids);
+                            
+                            VizState state = new VizState(r, c, scanDir, 1, persistentValids, persistentInvalids, curHighlights, 
+                                    String.format("[%s] Friendly piece at %s is directly adjacent. No opponent pieces to flip.", 
+                                            scanDirName, OthelloBitboard.indexToAlgebraic(currR * 8 + currC)));
+                            
+                            copyStringArray(currentSquareMarkers, state.markers);
+                            copyStringArray(currentSquareTexts, state.tileTexts);
+                            
+                            applyTransientOverlay(curHighlights, state.markers, state.tileTexts, 
+                                                  currentSpaceInvalids, currentSpaceFailedOpponents,
+                                                  currentSquareMarkers, currentSquareTexts,
+                                                  evaluated, persistentValids, persistentInvalids);
+
+                            state.tileTexts[r][c] = "Evaluating";
+                            state.markers[r][c] = "?";
+                            state.arrows.addAll(cloneArrows(currentSquareArrows));
+                            vizHistory.add(state);
+                            continue;
                         }
                     }
-                }
-            }
 
-            // Scan and map out the recursive shifting chains of opponent pieces
-            for (int r = 0; r < 8; r++) {
-                for (int c = 0; c < 8; c++) {
-                    if (game.getPieceAt(r, c) == currentPlayer) {
-                        int currR = r + dr;
-                        int currC = c + dc;
-                        List<int[]> scannedOpponents = new ArrayList<>();
+                    List<int[]> scannedOpponents = new ArrayList<>();
+                    List<int[]> currentDirArrows = new ArrayList<>();
+
+                    while (currR >= 0 && currR < 8 && currC >= 0 && currC < 8 && game.getPieceAt(currR, currC) == opponent) {
+                        scannedOpponents.add(new int[]{currR, currC});
                         
-                        while (currR >= 0 && currR < 8 && currC >= 0 && currC < 8 && game.getPieceAt(currR, currC) == opponent) {
-                            scannedOpponents.add(new int[]{currR, currC});
-                            currR += dr;
-                            currC += dc;
+                        clearArray(curHighlights);
+                        applyOOCandidateHighlights(curHighlights, currentSquareTexts, currentSquareMarkers, evaluated, 
+                                                   persistentValids, persistentInvalids, r, c, true);
+                        
+                        applyTransientOverlay(curHighlights, currentSquareMarkers, currentSquareTexts, 
+                                              currentSpaceInvalids, currentSpaceFailedOpponents,
+                                              currentSquareMarkers, currentSquareTexts,
+                                              evaluated, persistentValids, persistentInvalids);
+                        
+                        for (int[] p : scannedOpponents) {
+                            curHighlights[p[0]][p[1]] = 2; 
                         }
                         
+                        VizState state = new VizState(r, c, scanDir, step, persistentValids, persistentInvalids, curHighlights, 
+                                String.format("[%s] Opponent piece detected at %s", 
+                                        scanDirName, OthelloBitboard.indexToAlgebraic(currR * 8 + currC)));
+                        
+                        copyStringArray(currentSquareMarkers, state.markers);
+                        copyStringArray(currentSquareTexts, state.tileTexts);
+                        
+                        applyTransientOverlay(curHighlights, state.markers, state.tileTexts, 
+                                              currentSpaceInvalids, currentSpaceFailedOpponents,
+                                              currentSquareMarkers, currentSquareTexts,
+                                              evaluated, persistentValids, persistentInvalids);
+                        
+                        state.tileTexts[r][c] = "Evaluating"; 
+                        state.markers[r][c] = "?";
+                        
+                        for (int[] p : scannedOpponents) {
+                            state.markers[p[0]][p[1]] = String.valueOf(scannedOpponents.indexOf(p) + 1);
+                        }
+                        
+                        int prevR = currR - sdr;
+                        int prevC = currC - sdc;
+                        currentDirArrows.add(new int[]{prevR, prevC, currR, currC, 1}); 
+                        
+                        state.arrows.addAll(cloneArrows(currentSquareArrows));
+                        state.arrows.addAll(cloneArrows(currentDirArrows));
+                        
+                        vizHistory.add(state);
+                        
+                        currR += sdr;
+                        currC += sdc;
+                        step++;
+                    }
+
+                    if (currR >= 0 && currR < 8 && currC >= 0 && currC < 8 && game.getPieceAt(currR, currC) == currentPlayer) {
+                        if (step > 1) {
+                            cellIsIndeedValid = true;
+                            evaluated[r][c] = true;
+                            persistentValids[r][c] = true;
+
+                            clearArray(curHighlights);
+                            applyOOCandidateHighlights(curHighlights, currentSquareTexts, currentSquareMarkers, evaluated, 
+                                                       persistentValids, persistentInvalids, r, c, false);
+
+                            applyTransientOverlay(curHighlights, currentSquareMarkers, currentSquareTexts, 
+                                                  currentSpaceInvalids, currentSpaceFailedOpponents,
+                                                  currentSquareMarkers, currentSquareTexts,
+                                                  evaluated, persistentValids, persistentInvalids);
+
+                            for (int[] p : scannedOpponents) {
+                                curHighlights[p[0]][p[1]] = 3; 
+                            }
+                            curHighlights[currR][currC] = 3; 
+                            
+                            VizState state = new VizState(r, c, scanDir, step, persistentValids, persistentInvalids, curHighlights, 
+                                    String.format("[%s] Friendly anchor found at %s! Valid line confirmed.", 
+                                            scanDirName, OthelloBitboard.indexToAlgebraic(currR * 8 + currC)));
+                            state.markers[r][c] = "✓"; 
+                            state.tileTexts[r][c] = "Valid";
+                            
+                            for (int[] arrow : currentDirArrows) {
+                                arrow[4] = 3; 
+                            }
+                            currentSquareArrows.addAll(currentDirArrows);
+
+                            int tempR = r; // Fixed: replaced incorrect nr with r
+                            int tempC = c; // Fixed: replaced incorrect nc with c
+                            while (tempR != currR || tempC != currC) {
+                                currentSquareArrows.add(new int[]{tempR, tempC, tempR + sdr, tempC + sdc, 3}); 
+                                tempR += sdr;
+                                tempC += sdc;
+                            }
+                            
+                            currentSquareMarkers[r][c] = "✓";
+                            currentSquareTexts[r][c] = "Valid";
+                            
+                            copyStringArray(currentSquareMarkers, state.markers);
+                            copyStringArray(currentSquareTexts, state.tileTexts);
+                            
+                            applyTransientOverlay(curHighlights, state.markers, state.tileTexts, 
+                                                  currentSpaceInvalids, currentSpaceFailedOpponents,
+                                                  currentSquareMarkers, currentSquareTexts,
+                                                  evaluated, persistentValids, persistentInvalids);
+
+                            state.arrows.addAll(cloneArrows(currentSquareArrows));
+                            vizHistory.add(state);
+                        }
+                    } else {
                         if (!scannedOpponents.isEmpty()) {
-                            int[] firstOpp = scannedOpponents.get(0);
-                            int[] lastOpp = scannedOpponents.get(scannedOpponents.size() - 1);
+                            boolean isAlreadyValid = (currR >= 0 && currR < 8 && currC >= 0 && currC < 8) && persistentValids[currR][currC];
                             
-                            int stepIndex = 1;
-                            for (int[] opp : scannedOpponents) {
-                                curHighlights[opp[0]][opp[1]] = 2; // Yellow (Opponent)
-                                step2Markers[opp[0]][opp[1]] = String.valueOf(stepIndex++); 
-                            }
-                            
-                            step2Arrows.add(new int[]{firstOpp[0], firstOpp[1], lastOpp[0], lastOpp[1], 1}); // Yellow arrow detailing chain depth
-                        }
-                    }
-                }
-            }
-
-            VizState step2State = new VizState(-1, -1, d, 2, persistentValids, persistentInvalids, curHighlights, String.format("[Bitboard] Step 2: Mask shifted friendly board with opponent pieces in direction %s", dirName));
-            step2State.setTileTexts(step2Texts);
-            step2State.setMarkers(step2Markers);
-            step2State.arrows = step2Arrows;
-            vizHistory.add(step2State);
-
-            // --- Step 3: Find empty spaces that come after a chain of opponent pieces (Mark as Valid) ---
-            clearArray(curHighlights);
-            String[][] step3Texts = new String[8][8];
-            String[][] step3Markers = new String[8][8];
-            List<int[]> step3Arrows = new ArrayList<>();
-            List<int[]> step3WallHits = new ArrayList<>();
-
-            // Preserve own Purple pieces
-            for (int r = 0; r < 8; r++) {
-                for (int c = 0; c < 8; c++) {
-                    if (game.getPieceAt(r, c) == currentPlayer) {
-                        curHighlights[r][c] = 6; 
-                    }
-                }
-            }
-
-            // Keep Step 1's immediate invalid empty spaces marked Red (or revert back to Green if already valid)
-            for (int r = 0; r < 8; r++) {
-                for (int c = 0; c < 8; c++) {
-                    if (dirInvalids[r][c]) {
-                        if (persistentValids[r][c]) {
-                            curHighlights[r][c] = 3; // Reverted back to Green (3) for Step 3
-                            step3Texts[r][c] = "Valid"; // Retains "Valid" text
-                            step3Markers[r][c] = "✓"; // Keep its checkmark
-                        } else {
-                            curHighlights[r][c] = 4; // Red
-                            step3Texts[r][c] = "Invalid";
-                            step3Markers[r][c] = "X";
-                        }
-                    } else {
-                        boolean isCandidate = isPotentialBitboardTarget(r, c, currentPlayer, d);
-                        if (isCandidate) {
-                            if (persistentValids[r][c]) {
-                                curHighlights[r][c] = 1; // Remain Turquoise
-                                step3Texts[r][c] = "Valid"; // Retains "Valid" text
-                                step3Markers[r][c] = "✓";
+                            currentSpaceInvalids[currR][currC] = true;
+                            if (isAlreadyValid) {
+                                currentSquareMarkers[currR][currC] = "✓";
+                                currentSquareTexts[currR][currC] = "Valid";
                             } else {
-                                curHighlights[r][c] = 1; 
-                                step3Texts[r][c] = "Evaluating";
-                                step3Markers[r][c] = "?";
+                                currentSquareMarkers[currR][currC] = "X"; 
+                                currentSquareTexts[currR][currC] = "Invalid";
                             }
-                        } else {
-                            if (persistentValids[r][c]) {
-                                curHighlights[r][c] = 3;
-                                step3Texts[r][c] = "Valid";
-                                step3Markers[r][c] = "✓";
-                            } else if (persistentInvalids[r][c]) {
-                                curHighlights[r][c] = 4;
-                                step3Texts[r][c] = "Invalid";
-                                step3Markers[r][c] = "X";
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Mask shifts with empty spaces to evaluate the validity
-            for (int r = 0; r < 8; r++) {
-                for (int c = 0; c < 8; c++) {
-                    if (game.getPieceAt(r, c) == currentPlayer) {
-                        int currR = r + dr;
-                        int currC = c + dc;
-                        int count = 0;
-                        while (currR >= 0 && currR < 8 && currC >= 0 && currC < 8 && game.getPieceAt(currR, currC) == opponent) {
-                            count++;
-                            currR += dr;
-                            currC += dc;
-                        }
-                        
-                        if (count > 0) {
-                            int nextR = currR;
-                            int nextC = currC;
-                            int lastOppR = currR - dr;
-                            int lastOppC = currC - dc;
                             
-                            if (nextR < 0 || nextR >= 8 || nextC < 0 || nextC >= 8) {
-                                // Shift hits board boundary
-                                curHighlights[lastOppR][lastOppC] = 4; 
-                                step3WallHits.add(new int[]{r, c, lastOppR, lastOppC, nextR, nextC});
-                                step3Texts[lastOppR][lastOppC] = "End of board";
-                            } else {
-                                int nextPiece = game.getPieceAt(nextR, nextC);
-                                if (nextPiece == EMPTY) {
-                                    // Empty space immediately following opponent chain -> VALID!
-                                    curHighlights[nextR][nextC] = 3; // Green (Valid)
-                                    persistentValids[nextR][nextC] = true;
-                                    step3Markers[nextR][nextC] = "✓";
-                                    step3Texts[nextR][nextC] = "Valid";
-                                    step3Arrows.add(new int[]{r, c, nextR, nextC, 3}); // Green arrow
-                                    checked[nextR][nextC] = true;
-                                } else if (nextPiece == currentPlayer) {
-                                    // Landed back on friendly own piece -> Invalid (or Red if already Valid)
-                                    if (persistentValids[nextR][nextC]) {
-                                        curHighlights[nextR][nextC] = 4; // Fails directional scan, so highlighted in Red
-                                        step3Texts[nextR][nextC] = "Valid"; // Retains "Valid" text
-                                        step3Markers[nextR][nextC] = "✓"; // Keep its checkmark
-                                    } else {
-                                        curHighlights[nextR][nextC] = 4; // Red (Failed check)
-                                        step3Markers[nextR][nextC] = "X";
-                                        step3Texts[nextR][nextC] = "Own Piece"; // Add "Own Piece" text label on friendly alignment
-                                    }
-                                    step3Arrows.add(new int[]{r, c, nextR, nextC, 2}); // Red arrow
+                            int tempR = r; // Fixed: replaced incorrect nr with r
+                            int tempC = c; // Fixed: replaced incorrect nc with c
+                            while (tempR != currR || tempC != currC) {
+                                currentSquareArrows.add(new int[]{tempR, tempC, tempR + sdr, tempC + sdc, 2}); 
+                                tempR += sdr;
+                                tempC += sdc;
+                            }
+                            
+                            for (int[] p : scannedOpponents) {
+                                currentSpaceFailedOpponents[p[0]][p[1]] = true;
+                            }
+
+                            clearArray(curHighlights);
+                            applyOOCandidateHighlights(curHighlights, currentSquareTexts, currentSquareMarkers, evaluated, 
+                                                       persistentValids, persistentInvalids, r, c, true);
+                            
+                            applyTransientOverlay(curHighlights, currentSquareMarkers, currentSquareTexts, 
+                                                  currentSpaceInvalids, currentSpaceFailedOpponents,
+                                                  currentSquareMarkers, currentSquareTexts,
+                                                  evaluated, persistentValids, persistentInvalids);
+
+                            boolean hitWall = (currR < 0 || currR >= 8 || currC < 0 || currC >= 8);
+                            int failedTargetR = currR;
+                            int failedTargetC = currC;
+                            
+                            for (int[] arrow : currentDirArrows) {
+                                arrow[4] = 2; 
+                            }
+                            currentSquareArrows.addAll(currentDirArrows);
+
+                            if (hitWall) {
+                                failedTargetR = currR - sdr;
+                                failedTargetC = currC - sdc;
+                                
+                                clearArray(curHighlights);
+                                applyOOCandidateHighlights(curHighlights, currentSquareTexts, currentSquareMarkers, evaluated, 
+                                                           persistentValids, persistentInvalids, r, c, true);
+                                
+                                applyTransientOverlay(curHighlights, currentSquareMarkers, currentSquareTexts, 
+                                                      currentSpaceInvalids, currentSpaceFailedOpponents,
+                                                      currentSquareMarkers, currentSquareTexts,
+                                                      evaluated, persistentValids, persistentInvalids);
+
+                                VizState state = new VizState(r, c, scanDir, step, persistentValids, persistentInvalids, curHighlights, 
+                                        String.format("[%s] Path failed (Boundary wall reached).", scanDirName));
+                                
+                                currentSquareMarkers[failedTargetR][failedTargetC] = "X"; 
+                                currentSquareTexts[failedTargetR][failedTargetC] = "End of board";
+                                
+                                int tr = r; // Fixed: replaced incorrect nr with r
+                                int tc = c; // Fixed: replaced incorrect nc with c
+                                while (tr != failedTargetR || tc != failedTargetC) {
+                                    currentSquareArrows.add(new int[]{tr, tc, tr + sdr, tc + sdc, 2}); 
+                                    tr += sdr;
+                                    tc += sdc;
                                 }
+                                
+                                copyStringArray(currentSquareMarkers, state.markers);
+                                copyStringArray(currentSquareTexts, state.tileTexts);
+                                
+                                applyTransientOverlay(curHighlights, state.markers, state.tileTexts, 
+                                                      currentSpaceInvalids, currentSpaceFailedOpponents,
+                                                      currentSquareMarkers, currentSquareTexts,
+                                                      evaluated, persistentValids, persistentInvalids);
+
+                                state.tileTexts[r][c] = "Evaluating"; 
+                                state.markers[r][c] = "?";
+                                state.arrows.addAll(cloneArrows(currentSquareArrows));
+                                vizHistory.add(state);
+                            } else {
+                                String failMsg = isAlreadyValid 
+                                    ? String.format("[%s] Path failed (Hit already valid empty square at %s).", scanDirName, OthelloBitboard.indexToAlgebraic(currR * 8 + currC))
+                                    : String.format("[%s] Path failed (Empty square hit at %s).", scanDirName, OthelloBitboard.indexToAlgebraic(currR * 8 + currC));
+
+                                VizState state = new VizState(r, c, scanDir, step, persistentValids, persistentInvalids, curHighlights, failMsg);
+                                
+                                copyStringArray(currentSquareMarkers, state.markers);
+                                copyStringArray(currentSquareTexts, state.tileTexts);
+                                
+                                applyTransientOverlay(curHighlights, state.markers, state.tileTexts, 
+                                                      currentSpaceInvalids, currentSpaceFailedOpponents,
+                                                      currentSquareMarkers, currentSquareTexts,
+                                                      evaluated, persistentValids, persistentInvalids);
+
+                                state.tileTexts[r][c] = "Evaluating"; 
+                                state.markers[r][c] = "?";
+                                state.arrows.addAll(cloneArrows(currentSquareArrows));
+                                vizHistory.add(state);
                             }
                         }
                     }
                 }
-            }
 
-            VizState step3State = new VizState(-1, -1, d, 3, persistentValids, persistentInvalids, curHighlights, String.format("[Bitboard] Step 3: Shift recursively and mask with empty spaces in direction %s", dirName));
-            step3State.setTileTexts(step3Texts);
-            step3State.setMarkers(step3Markers);
-            step3State.arrows = step3Arrows;
-            step3State.wallHits = step3WallHits;
-            vizHistory.add(step3State);
+                if (!cellIsIndeedValid) {
+                    evaluated[r][c] = true;
+                    persistentInvalids[r][c] = true; 
+
+                    clearArray(curHighlights);
+                    String[][] cleanMarkers = new String[8][8];
+                    String[][] cleanTexts = new String[8][8];
+                    applyOOCandidateHighlights(curHighlights, cleanTexts, cleanMarkers, evaluated, 
+                                               persistentValids, persistentInvalids, r, c, false);
+
+                    VizState invalidState = new VizState(r, c, -1, 0, persistentValids, persistentInvalids, curHighlights, 
+                            String.format("Square %s evaluated: No valid moves possible.", cellName));
+                    
+                    copyStringArray(cleanMarkers, invalidState.markers);
+                    copyStringArray(cleanTexts, invalidState.tileTexts);
+                    
+                    vizHistory.add(invalidState);
+                }
+            }
         }
 
-        // --- Final Frame: Shows all validated squares, and marks all failed empty adjacent squares as "Invalid" ---
         clearArray(curHighlights);
         String[][] finalMarkers = new String[8][8];
         String[][] finalTexts = new String[8][8];
@@ -3316,23 +3032,52 @@ private void generateBitboardHistory() {
                         curHighlights[r][c] = 3; // Green (Valid)
                         finalMarkers[r][c] = "✓";
                         finalTexts[r][c] = "Valid";
-                    } else {
-                        if (checked[r][c]) {
-                            curHighlights[r][c] = 4; // Red (Invalid)
-                            finalTexts[r][c] = "Invalid";
-                            finalMarkers[r][c] = "X";
-                        }
+                    } else if (persistentInvalids[r][c]) { // Fixed: Changed checked[r][c] to persistentInvalids[r][c]
+                        curHighlights[r][c] = 4; // Red (Invalid)
+                        finalTexts[r][c] = "Invalid";
+                        finalMarkers[r][c] = "X";
                     }
                 }
             }
         }
         
-        VizState finalState = new VizState(-1, -1, -1, 0, persistentValids, persistentInvalids, curHighlights, "Bitboard scan complete! All valid moves are highlighted.");
+        VizState finalState = new VizState(-1, -1, -1, 0, persistentValids, persistentInvalids, curHighlights, 
+                "Primitive Sweep complete! All legal moves are highlighted.");
         finalState.setMarkers(finalMarkers);
         finalState.setTileTexts(finalTexts);
         vizHistory.add(finalState);
     }
 
+    private void drawCheckmark(Graphics2D g2, int cx, int cy, int size) {
+        g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        g2.setStroke(new BasicStroke(4.0f));
+        
+        // Shadow
+        g2.setColor(new Color(0, 0, 0, 180));
+        g2.drawLine(cx - size/3 + 1, cy + 1, cx - size/10 + 1, cy + size/3 + 1);
+        g2.drawLine(cx - size/10 + 1, cy + size/3 + 1, cx + size/3 + 1, cy - size/3 + 1);
+        
+        // Foreground
+        g2.setColor(new Color(0, 255, 0));
+        g2.drawLine(cx - size/3, cy, cx - size/10, cy + size/3);
+        g2.drawLine(cx - size/10, cy + size/3, cx + size/3, cy - size/3);
+    }
+
+    // Move cross rendering to the outer class so it is accessible globally
+    private void drawCross(Graphics2D g2, int cx, int cy, int size) {
+        g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        g2.setStroke(new BasicStroke(4.0f));
+        
+        // Shadow
+        g2.setColor(new Color(0, 0, 0, 180));
+        g2.drawLine(cx - size/3 + 1, cy - size/3 + 1, cx + size/3 + 1, cy + size/3 + 1);
+        g2.drawLine(cx + size/3 + 1, cy - size/3 + 1, cx - size/3 + 1, cy + size/3 + 1);
+        
+        // Foreground
+        g2.setColor(new Color(255, 50, 50));
+        g2.drawLine(cx - size/3, cy - size/3, cx + size/3, cy + size/3);
+        g2.drawLine(cx + size/3, cy - size/3, cx - size/3, cy + size/3);
+    }
 
     private class BoardSquare extends JPanel {
         private final int row;
@@ -3356,33 +3101,27 @@ private void generateBitboardHistory() {
             });
         }
 
-        // Standard vector checkmark generator (Fixed "Tofu" Boxes)
         private void drawCheckmark(Graphics2D g2, int cx, int cy, int size) {
             g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
             g2.setStroke(new BasicStroke(4.0f));
             
-            // Shadow
             g2.setColor(new Color(0, 0, 0, 180));
             g2.drawLine(cx - size/3 + 1, cy + 1, cx - size/10 + 1, cy + size/3 + 1);
             g2.drawLine(cx - size/10 + 1, cy + size/3 + 1, cx + size/3 + 1, cy - size/3 + 1);
             
-            // Foreground
             g2.setColor(new Color(0, 255, 0));
             g2.drawLine(cx - size/3, cy, cx - size/10, cy + size/3);
             g2.drawLine(cx - size/10, cy + size/3, cx + size/3, cy - size/3);
         }
 
-        // Standard vector cross generator
         private void drawCross(Graphics2D g2, int cx, int cy, int size) {
             g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
             g2.setStroke(new BasicStroke(4.0f));
             
-            // Shadow
             g2.setColor(new Color(0, 0, 0, 180));
             g2.drawLine(cx - size/3 + 1, cy - size/3 + 1, cx + size/3 + 1, cy + size/3 + 1);
             g2.drawLine(cx + size/3 + 1, cy - size/3 + 1, cx - size/3 + 1, cy + size/3 + 1);
             
-            // Foreground
             g2.setColor(new Color(255, 50, 50));
             g2.drawLine(cx - size/3, cy - size/3, cx + size/3, cy + size/3);
             g2.drawLine(cx + size/3, cy - size/3, cx - size/3, cy + size/3);
@@ -3396,10 +3135,8 @@ private void generateBitboardHistory() {
 
             int highlight = debugHighlights[row][col];
             
-            // Retain found valid locations in a soft transparent green hue
             boolean isPersistentValid = false;
             boolean isPersistentInvalid = false;
-
 
             if (visualizerMode && historyIndex >= 0 && historyIndex < vizHistory.size()) {
                 VizState state = vizHistory.get(historyIndex);
@@ -3409,14 +3146,13 @@ private void generateBitboardHistory() {
             
             int piece = game.getPieceAt(row, col);
 
-            // 1. Draw Translucent Color Highlights
             if (highlight != 0) {
-                if (highlight == 1) g2.setColor(new Color(0, 191, 255, 120));      // Blue (Origins / Own Piece)
-                else if (highlight == 2) g2.setColor(new Color(255, 215, 0, 120)); // Yellow (Candidates)
-                else if (highlight == 3) g2.setColor(new Color(50, 205, 50, 120)); // Green (Valid)
-                else if (highlight == 4) g2.setColor(new Color(220, 20, 60, 120)); // Red (Failed paths)
-                else if (highlight == 5) g2.setColor(new Color(255, 140, 0, 120)); // Orange (Shifts)
-                else if (highlight == 6) g2.setColor(new Color(160, 32, 240, 120)); // Vibrant Purple (Active Friendly Step 0)
+                if (highlight == 1) g2.setColor(new Color(0, 191, 255, 120));      
+                else if (highlight == 2) g2.setColor(new Color(255, 215, 0, 120)); 
+                else if (highlight == 3) g2.setColor(new Color(50, 205, 50, 120)); 
+                else if (highlight == 4) g2.setColor(new Color(220, 20, 60, 120)); 
+                else if (highlight == 5) g2.setColor(new Color(255, 140, 0, 120)); 
+                else if (highlight == 6) g2.setColor(new Color(160, 32, 240, 120)); 
                 g.fillRect(0, 0, getWidth(), getHeight());
             } 
             else if (isPersistentValid) {
@@ -3428,10 +3164,6 @@ private void generateBitboardHistory() {
                 g.fillRect(0, 0, getWidth(), getHeight());
             }
 
-            // 2. Draw active game discs
-            boolean isValidMove = (!isProcessing && !isAITurn() && !visualizerMode && game.isValidMove(row, col, currentPlayer));
-
-            int padding = 6;
             int size = Math.min(getWidth(), getHeight()) - 12;
             int x = (getWidth() - size) / 2;
             int y = (getHeight() - size) / 2;
@@ -3440,7 +3172,7 @@ private void generateBitboardHistory() {
                 drawDisc(g2, Color.BLACK, x, y, size);
             } else if (piece == WHITE) {
                 drawDisc(g2, Color.WHITE, x, y, size);
-            } else if (isValidMove) {
+            } else if (!isProcessing && !isAITurn() && !visualizerMode && game.isValidMove(row, col, currentPlayer)) {
                 g2.setColor(new Color(0, 0, 0, 40));
                 int hintSize = size / 3;
                 g2.fillOval(getWidth() / 2 - hintSize / 2, getHeight() / 2 - hintSize / 2, hintSize, hintSize);
@@ -3459,17 +3191,12 @@ private void generateBitboardHistory() {
         }
     }
 
-    // =========================================================================
-    // MODIFIED: AUTOMATED BENCHMARK FRAMEWORK WITH COMPREHENSIVE PERFORMANCE SUMMARY
-    // =========================================================================
-
     private void runAutomatedBenchmark() {
         if (isProcessing) {
             Toolkit.getDefaultToolkit().beep();
             return;
         }
 
-        // Lock UI controls for the duration of the benchmark run
         isProcessing = true;
         restartBtn.setEnabled(false);
         loadRecordBtn.setEnabled(false);
@@ -3481,6 +3208,7 @@ private void generateBitboardHistory() {
         depthSlider.setEnabled(false);
         bitboardRadio.setEnabled(false);
         ooRadio.setEnabled(false);
+        primitive2dRadio.setEnabled(false);
         nestedRadio.setEnabled(false);
         visualizerCheckbox.setEnabled(false);
         alphaBetaCheckbox.setEnabled(false);
@@ -3497,23 +3225,42 @@ private void generateBitboardHistory() {
             final String[] expectedMoves = new String[12]; 
 
             try {
-                // TYPE 0: Visualizer Modes (Omitted from GUI summary modal, but run on-screen)
-                // 1. Fresh Board (Traditional)
+                // 1. 2D Cell Objects - Fresh Board (Primitive Sweep)
+                runSingleBenchmarkStep(EngineType.NESTED_OBJECT, true, true, true, 7, "2D Cell Objects - Fresh Board Visualizer", "#777777", expectedMoves, summary, false);
+                if (Thread.currentThread().isInterrupted()) return;
+                Thread.sleep(1000);
+
+                // 2. 2D Primitive Values - Fresh Board (Frontier Scan)
+                runSingleBenchmarkStep(EngineType.PRIMITIVE_2D, true, true, true, 7, "2D Primitive Values - Fresh Board Visualizer", "#777777", expectedMoves, summary, false);
+                if (Thread.currentThread().isInterrupted()) return;
+                Thread.sleep(1000);
+
+                // 3. 1D Flat Array - Fresh Board (Segment Scan)
                 runSingleBenchmarkStep(EngineType.FLAT_ARRAY, true, true, true, 7, "1D Flat Array - Fresh Board Visualizer", "#777777", expectedMoves, summary, false);
                 if (Thread.currentThread().isInterrupted()) return;
                 Thread.sleep(1000);
 
-                // 2. Fresh Board (Bitboard)
+                // 4. Bitboard - Fresh Board
                 runSingleBenchmarkStep(EngineType.BITBOARD, true, true, true, 7, "Bitboard - Fresh Board Visualizer", "#777777", expectedMoves, summary, false);
                 if (Thread.currentThread().isInterrupted()) return;
                 Thread.sleep(1000);
 
-                // 3. Takizawa Board (Traditional)
+                // 5. 2D Cell Objects - Takizawa (Primitive Sweep)
+                runSingleBenchmarkStep(EngineType.NESTED_OBJECT, true, true, true, 7, "2D Cell Objects - Takizawa Visualizer", "#777777", expectedMoves, summary, true);
+                if (Thread.currentThread().isInterrupted()) return;
+                Thread.sleep(1000);
+
+                // 6. 2D Primitive Values - Takizawa (Frontier Scan)
+                runSingleBenchmarkStep(EngineType.PRIMITIVE_2D, true, true, true, 7, "2D Primitive Values - Takizawa Visualizer", "#777777", expectedMoves, summary, true);
+                if (Thread.currentThread().isInterrupted()) return;
+                Thread.sleep(1000);
+
+                // 7. 1D Flat Array - Takizawa (Segment Scan)
                 runSingleBenchmarkStep(EngineType.FLAT_ARRAY, true, true, true, 7, "1D Flat Array - Takizawa Visualizer", "#777777", expectedMoves, summary, true);
                 if (Thread.currentThread().isInterrupted()) return;
                 Thread.sleep(1000);
 
-                // 4. Takizawa Board (Bitboard)
+                // 8. Bitboard - Takizawa
                 runSingleBenchmarkStep(EngineType.BITBOARD, true, true, true, 7, "Bitboard - Takizawa Visualizer", "#777777", expectedMoves, summary, true);
                 if (Thread.currentThread().isInterrupted()) return;
                 Thread.sleep(1000);
@@ -3524,13 +3271,17 @@ private void generateBitboardHistory() {
                 if (Thread.currentThread().isInterrupted()) return;
                 Thread.sleep(1000);
 
+                double t6_primitive = runSingleBenchmarkStep(EngineType.PRIMITIVE_2D, false, false, false, 6, "2D Primitive Values - No AB Pruning (Depth 6)", "#D32F2F", expectedMoves, summary, true);
+                if (Thread.currentThread().isInterrupted()) return;
+                Thread.sleep(1000);
+
                 double t6_flat = runSingleBenchmarkStep(EngineType.FLAT_ARRAY, false, false, false, 6, "1D Flat Array - No AB Pruning (Depth 6)", "#D32F2F", expectedMoves, summary, true);
                 if (Thread.currentThread().isInterrupted()) return;
                 Thread.sleep(1000);
 
                 double t6_bitboard = runSingleBenchmarkStep(EngineType.BITBOARD, false, false, false, 6, "Bitboard - No AB Pruning (Depth 6)", "#D32F2F", expectedMoves, summary, true);
                 
-                appendComparison(summary, t6_nested, t6_flat, t6_bitboard);
+                appendComparison4(summary, t6_nested, t6_primitive, t6_flat, t6_bitboard);
                 appendSeparator(summary);
                 if (Thread.currentThread().isInterrupted()) return;
                 Thread.sleep(1000);
@@ -3541,13 +3292,17 @@ private void generateBitboardHistory() {
                 if (Thread.currentThread().isInterrupted()) return;
                 Thread.sleep(1000);
 
+                double t9_primitive = runSingleBenchmarkStep(EngineType.PRIMITIVE_2D, false, true, false, 9, "2D Primitive Values - AB, No Move Ordering (Depth 9)", "#1976D2", expectedMoves, summary, true);
+                if (Thread.currentThread().isInterrupted()) return;
+                Thread.sleep(1000);
+
                 double t9_flat = runSingleBenchmarkStep(EngineType.FLAT_ARRAY, false, true, false, 9, "1D Flat Array - AB, No Move Ordering (Depth 9)", "#1976D2", expectedMoves, summary, true);
                 if (Thread.currentThread().isInterrupted()) return;
                 Thread.sleep(1000);
 
                 double t9_bitboard = runSingleBenchmarkStep(EngineType.BITBOARD, false, true, false, 9, "Bitboard - AB, No Move Ordering (Depth 9)", "#1976D2", expectedMoves, summary, true);
                 
-                appendComparison(summary, t9_nested, t9_flat, t9_bitboard);
+                appendComparison4(summary, t9_nested, t9_primitive, t9_flat, t9_bitboard);
                 appendSeparator(summary);
                 if (Thread.currentThread().isInterrupted()) return;
                 Thread.sleep(1000);
@@ -3558,18 +3313,20 @@ private void generateBitboardHistory() {
                 if (Thread.currentThread().isInterrupted()) return;
                 Thread.sleep(1000);
 
+                double t10_primitive = runSingleBenchmarkStep(EngineType.PRIMITIVE_2D, false, true, true, 10, "2D Primitive Values - AB with Move Ordering (Depth 10)", "#388E3C", expectedMoves, summary, true);
+                if (Thread.currentThread().isInterrupted()) return;
+                Thread.sleep(1000);
+
                 double t10_flat = runSingleBenchmarkStep(EngineType.FLAT_ARRAY, false, true, true, 10, "1D Flat Array - AB with Move Ordering (Depth 10)", "#388E3C", expectedMoves, summary, true);
                 if (Thread.currentThread().isInterrupted()) return;
                 Thread.sleep(1000);
 
                 double t10_bitboard = runSingleBenchmarkStep(EngineType.BITBOARD, false, true, true, 10, "Bitboard - AB with Move Ordering (Depth 10)", "#388E3C", expectedMoves, summary, true);
                 
-                appendComparison(summary, t10_nested, t10_flat, t10_bitboard);
+                appendComparison4(summary, t10_nested, t10_primitive, t10_flat, t10_bitboard);
 
-                // Close the final HTML layout
                 summary.append("</body></html>");
 
-                // Present summary report visually
                 SwingUtilities.invokeLater(() -> {
                     JEditorPane editorPane = new JEditorPane();
                     editorPane.setContentType("text/html");
@@ -3585,7 +3342,6 @@ private void generateBitboardHistory() {
             } catch (InterruptedException ex) {
                 System.out.println("Benchmark interrupted.");
             } finally {
-                // Restore controls on Event Dispatch Thread (EDT)
                 SwingUtilities.invokeLater(() -> {
                     isProcessing = false;
                     restartBtn.setEnabled(true);
@@ -3598,6 +3354,7 @@ private void generateBitboardHistory() {
                     depthSlider.setEnabled(true);
                     bitboardRadio.setEnabled(true);
                     ooRadio.setEnabled(true);
+                    primitive2dRadio.setEnabled(true);
                     nestedRadio.setEnabled(true);
                     visualizerCheckbox.setSelected(false);
                     visualizerMode = false;
@@ -3613,45 +3370,39 @@ private void generateBitboardHistory() {
     }
 
     private void stopAutomatedBenchmark() {
-        // Immediately turn off the processing flag to kill any pending EDT tasks
         isProcessing = false;
 
-        // Stop the progress timer immediately to prevent any further EDT updates
         if (aiProgressTimer != null && aiProgressTimer.isRunning()) {
             aiProgressTimer.stop();
         }
 
-        // Cancel the active background search worker immediately (sends interrupt signal)
         if (activeBenchmarkWorker != null && !activeBenchmarkWorker.isDone()) {
             activeBenchmarkWorker.cancel(true);
         }
 
-        // Interrupt the main benchmark controller thread
         if (activeBenchmarkThread != null && activeBenchmarkThread.isAlive()) {
             activeBenchmarkThread.interrupt();
         }
 
-        // Trigger a full GUI restart on the EDT to perform a clean game reset
         SwingUtilities.invokeLater(() -> {
             stopAutoPlay();
             clearHighlights();
             
-            // Explicitly uncheck visualizer modes before calling restartGame()
             visualizerCheckbox.setSelected(false);
             visualizerMode = false;
             
-            restartGame(); // Reinitializes board back to default 4 discs and clears labels
+            restartGame(); 
             aiInfoLabel.setText("Benchmark stopped and reset.");
         });
     }
 
     private double runSingleBenchmarkStep(EngineType engine, boolean vizMode, boolean abActive, boolean moActive, int depth, String testName, String colorHex, String[] expectedMoves, StringBuilder summary, boolean isTakizawa) {
-        // Step 1: Update settings on GUI (via the EDT)
         try {
             SwingUtilities.invokeAndWait(() -> {
                 selectedEngine = engine;
                 bitboardRadio.setSelected(engine == EngineType.BITBOARD);
                 ooRadio.setSelected(engine == EngineType.FLAT_ARRAY);
+                primitive2dRadio.setSelected(engine == EngineType.PRIMITIVE_2D);
                 nestedRadio.setSelected(engine == EngineType.NESTED_OBJECT);
 
                 visualizerCheckbox.setSelected(vizMode);
@@ -3664,15 +3415,13 @@ private void generateBitboardHistory() {
                     moveOrderingCheckbox.setSelected(false);
                 }
 
-                // Ensure both checkboxes are locked disabled during benchmark execution
                 alphaBetaCheckbox.setEnabled(false);
                 moveOrderingCheckbox.setEnabled(false);
 
                 aiDepth = depth;
                 depthSlider.setValue(depth);
-                depthLabel.setText("Depth: " + depth);
+                depthLabel.setText("Depth: " + aiDepth);
 
-                // Setup board state dynamically
                 resetBoardForBenchmark(vizMode, isTakizawa); 
                 
                 boardPanel.repaint();
@@ -3682,7 +3431,6 @@ private void generateBitboardHistory() {
             ex.printStackTrace();
         }
 
-        // Give the UI a brief moment to render the newly updated layout state
         try {
             Thread.sleep(150);
         } catch (InterruptedException e) {
@@ -3690,7 +3438,6 @@ private void generateBitboardHistory() {
             return 0.0;
         }
 
-        // Step 2: Execute the evaluation
         String consoleResultStr = "";
         double finalTimeSec = 0.0;
 
@@ -3699,9 +3446,11 @@ private void generateBitboardHistory() {
             if (engine == EngineType.BITBOARD) {
                 generateBitboardHistory();
             } else if (engine == EngineType.FLAT_ARRAY) {
-                generateFlatArrayOptimizedHistory(); // Added routing
+                generateFlatArrayOptimizedHistory();
+            } else if (engine == EngineType.PRIMITIVE_2D) {
+                generateOOHistoryFrontier();
             } else {
-                generateOOHistory();
+                generateOOHistoryPrimitive();
             }
             long endTime = System.nanoTime();
             double durationMs = (endTime - startTime) / 1_000_000.0;
@@ -3716,15 +3465,13 @@ private void generateBitboardHistory() {
                 testName, frames, durationMs
             );
             
-            // Kick off visualizer playback on the EDT
             SwingUtilities.invokeLater(() -> {
-                row3.setVisible(true); // Made visible specifically for visualizer tests
+                row3.setVisible(true); 
                 historyIndex = 0;
                 applyHistoryFrame();
                 startAutoPlay();
             });
 
-            // Wait for the EDT to schedule and trigger startAutoPlay()
             try {
                 Thread.sleep(150);
             } catch (InterruptedException e) {
@@ -3732,25 +3479,22 @@ private void generateBitboardHistory() {
                 return 0.0;
             }
 
-            // Block the background benchmark thread here until the animation completes
             while (isAutoPlaying) {
                 try {
-                    Thread.sleep(100); // Poll status every 100ms
+                    Thread.sleep(100); 
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                     break;
                 }
             }
         } else {
-            // Uncheck/pause any visualizer autoplay animations running on the GUI, and hide VCR panel
             SwingUtilities.invokeLater(() -> {
                 stopAutoPlay();
-                row3.setVisible(false); // Hidden outside of visualizer mode
-                clearHighlights(); // Clear any visualizer overlay remnants before search starts
+                row3.setVisible(false); 
+                clearHighlights(); 
                 boardPanel.repaint();
             });
 
-            // Launch the search via an asynchronous SwingWorker so that the ticking progress timer runs on the EDT
             java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(1);
             final int[] foundMoveIdx = new int[1];
             final long[] searchedStates = new long[1];
@@ -3760,7 +3504,7 @@ private void generateBitboardHistory() {
             SwingUtilities.invokeLater(() -> {
                 if (!isProcessing) {
                     latch.countDown();
-                    return; // Abort starting search worker if stopped
+                    return; 
                 }
                 aiStartTime = System.nanoTime();
                 aiProgressTimer = new Timer(50, ev -> {
@@ -3791,7 +3535,7 @@ private void generateBitboardHistory() {
                         aiProgressTimer.stop();
                         if (!isProcessing) {
                             latch.countDown();
-                            return; // Abort any updates if benchmark was stopped
+                            return; 
                         }
                         try {
                             foundMoveIdx[0] = get();
@@ -3800,14 +3544,13 @@ private void generateBitboardHistory() {
                         } catch (Exception e) {
                             foundMoveIdx[0] = -1;
                         }
-                        latch.countDown(); // Wake up the benchmark thread
+                        latch.countDown(); 
                     }
                 };
-                activeBenchmarkWorker = searchWorker; // Save reference so we can cancel it on Stop
+                activeBenchmarkWorker = searchWorker; 
                 searchWorker.execute();
             });
 
-            // Block benchmark thread until asynchronous worker finishes
             try {
                 latch.await();
             } catch (InterruptedException e) {
@@ -3828,7 +3571,6 @@ private void generateBitboardHistory() {
 
             String bestMoveAlg = OthelloBitboard.indexToAlgebraic(bestMoveIdx);
             
-            // Establish/Verify baseline logic internally
             if (expectedMoves[depth] == null) {
                 expectedMoves[depth] = bestMoveAlg; 
             }
@@ -3843,7 +3585,6 @@ private void generateBitboardHistory() {
                 testName, states, evals, durationSec, nps, bestMoveAlg
             );
 
-            // Format colored result blocks as HTML (excluding verifications)
             String htmlResult = String.format(
                 "<div style='margin-bottom: 10px; font-family: monospace; font-size: 11px;'>" +
                 " <span style='color: %s; font-weight: bold;'>&bull; %s</span><br>" +
@@ -3858,7 +3599,6 @@ private void generateBitboardHistory() {
             
             summary.append(htmlResult);
             
-            // Visually play the move on the GUI board
             SwingUtilities.invokeLater(() -> {
                 if (!isProcessing) return;
                 if (bestMoveIdx != -1) {
@@ -3872,20 +3612,21 @@ private void generateBitboardHistory() {
         return finalTimeSec;
     }
 
-    private void appendComparison(StringBuilder summary, double t_nested, double t_flat, double t_bitboard) {
-        // Protect divisions against zero on extremely fast runs
-        double ratio_flat_to_nested = t_nested / Math.max(t_flat, 0.000001);
+    private void appendComparison4(StringBuilder summary, double t_nested, double t_primitive, double t_flat, double t_bitboard) {
+        double ratio_prim_to_nested = t_nested / Math.max(t_primitive, 0.000001);
+        double ratio_flat_to_prim = t_primitive / Math.max(t_flat, 0.000001);
         double ratio_bitboard_to_flat = t_flat / Math.max(t_bitboard, 0.000001);
         double ratio_bitboard_to_nested = t_nested / Math.max(t_bitboard, 0.000001);
 
         String comparisonHtml = String.format(
             "<div style='background-color: #F5F7FA; border-left: 4px solid #1976D2; padding: 10px; margin: 10px 0; font-family: monospace; font-size: 11px; color: #2C3E50;'>" +
             " <b>Type Performance Comparison:</b><br>" +
-            " &bull; 1D Flat Array is <b>%.1fx</b> faster than 2D Cell Objects<br>" +
+            " &bull; 2D Primitive Values is <b>%.1fx</b> faster than 2D Cell Objects<br>" +
+            " &bull; 1D Flat Array is <b>%.1fx</b> faster than 2D Primitive Values<br>" +
             " &bull; Bitboard is <b>%.1fx</b> faster than 1D Flat Array<br>" +
             " &bull; Bitboard is <b>%.1fx</b> faster than 2D Cell Objects" +
             "</div>",
-            ratio_flat_to_nested, ratio_bitboard_to_flat, ratio_bitboard_to_nested
+            ratio_prim_to_nested, ratio_flat_to_prim, ratio_bitboard_to_flat, ratio_bitboard_to_nested
         );
         summary.append(comparisonHtml);
     }
@@ -3903,6 +3644,8 @@ private void generateBitboardHistory() {
             game = new OthelloBitboard(); 
         } else if (selectedEngine == EngineType.FLAT_ARRAY) {
             game = new OthelloFlatArray(); 
+        } else if (selectedEngine == EngineType.PRIMITIVE_2D) {
+            game = new OthelloPrimitive(); 
         } else {
             game = new OthelloCellObjects(); 
         }
@@ -3911,7 +3654,6 @@ private void generateBitboardHistory() {
         game.setUseMoveOrdering(moveOrderingCheckbox.isSelected());
 
         if (isTakizawa) {
-            // Play the 26 moves to load the Takizawa-33 record
             String[] moves = {
                 "F5", "D6", "C4", "F3", "C5", "B4", "B3", "E6", "C6", "G5", "F6", "C7", "C3", "D2", "C2", "B2", "F4", "G4", "G3", "G7", "G6", "E7", "D3", "G2", "H3", "B6"
             };
@@ -3930,19 +3672,525 @@ private void generateBitboardHistory() {
             }
             
             if (isVisualizer) {
-                currentPlayer = BLACK; // Keep Black's turn (Move 27) active for visualizer
+                currentPlayer = BLACK; 
             } else {
-                // For search simulations, Black automatically plays "D1" immediately as Move 27
                 int d1Index = OthelloBitboard.algebraicToIndex("D1"); 
                 if (game.isValidMove(d1Index / 8, d1Index % 8, activePlayer)) {
                     game.makeMove(d1Index / 8, d1Index % 8, activePlayer);
                 }
-                currentPlayer = WHITE; // Pass turn to WHITE (Move 28) for evaluation
+                currentPlayer = WHITE; 
             }
         } else {
-            // Fresh board starting state (4 center discs)
-            currentPlayer = BLACK; // Black's turn to move
+            currentPlayer = BLACK; 
         }
+    }
+
+    // Drawing helper loop for overlays
+    private void drawVisualizerOverlays(Graphics2D g2) {
+        if (!visualizerMode || historyIndex < 0 || historyIndex >= vizHistory.size()) return;
+
+        g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        VizState state = vizHistory.get(historyIndex);
+
+        int w = boardPanel.getWidth() / 8;
+        int h = boardPanel.getHeight() / 8;
+
+        // LAYER 1: Draw check arrows and bitboard shift arrows
+        g2.setStroke(new BasicStroke(4.0f)); 
+        for (int[] arrow : state.arrows) {
+            int startR = arrow[0];
+            int startC = arrow[1];
+            int endR = arrow[2];
+            int endC = arrow[3];
+            int colorType = arrow.length > 4 ? arrow[4] : 1; 
+
+            int x1 = startC * w + w / 2;
+            int y1 = startR * h + h / 2;
+            int x2 = endC * w + w / 2;
+            int y2 = endR * h + h / 2;
+
+            if (colorType == 2) {
+                g2.setColor(new Color(255, 50, 50));  // Red
+            } else if (colorType == 3) {
+                g2.setColor(new Color(0, 255, 0));    // Green
+            } else {
+                g2.setColor(new Color(255, 235, 0));   // Yellow
+            }
+
+            drawArrowLine(g2, x1, y1, x2, y2, 18, 9); 
+        }
+
+        // Draw offscreen wall hit vectors
+        for (int[] wallHit : state.wallHits) {
+            int startR = wallHit[0];
+            int startC = wallHit[1];
+            int edgeR = wallHit[2];
+            int edgeC = wallHit[3];
+            int offR = wallHit[4];
+            int offC = wallHit[5];
+
+            int xs = startC * w + w / 2;
+            int ys = startR * h + h / 2;
+            int x1 = edgeC * w + w / 2; 
+            int y1 = edgeR * h + h / 2; 
+            int x2 = offC * w + w / 2;  
+            int y2 = offR * h + h / 2;  
+
+            int edgeX = x1 + (x2 - x1) / 2;
+            int edgeY = y1 + (y2 - y1) / 2;
+
+            g2.setColor(new Color(255, 50, 50)); // Red
+            drawArrowLine(g2, xs, ys, edgeX, edgeY, 18, 9);
+            drawCross(g2, edgeX, edgeY, 16); 
+        }
+
+        // LAYER 2: Draw all vector outcome markers
+        for (int r = 0; r < 8; r++) {
+            for (int c = 0; c < 8; c++) {
+                String marker = state.markers[r][c];
+                if (marker != null) {
+                    int cx = c * w + w / 2;
+                    int cy = r * h + h / 2;
+                    
+                    if (marker.equals("✓")) {
+                        int checkY = cy + 13;
+                        drawCheckmark(g2, cx, checkY, 24); 
+                    } else if (marker.equals("X")) {
+                        int crossY = cy + 13;
+                        drawCross(g2, cx, crossY, 20); 
+                    } else if (marker.equals("?")) {
+                        int qY = cy + 13;
+                        g2.setFont(new Font("Arial", Font.BOLD, 22));
+                        g2.setColor(Color.BLACK); 
+                        g2.drawString("?", cx - 6 + 1, qY + 1); // Shadow
+                        g2.setColor(Color.WHITE); 
+                        g2.drawString("?", cx - 6, qY); // Foreground
+                    } else if (marker.startsWith("Skip")) {
+                        int axis = Integer.parseInt(marker.substring(4));
+                        drawSkipDoubleArrow(g2, cx, cy, axis); // Draw vector double-arrow
+                    } else {
+                        g2.setFont(new Font("Arial", Font.BOLD, 18));
+                        g2.setColor(Color.BLACK); 
+                        g2.drawString(marker, cx - 5 + 1, cy + 7 + 1); // Shadow
+                        g2.setColor(new Color(255, 235, 0)); 
+                        g2.drawString(marker, cx - 5, cy + 7); // Foreground
+                    }
+                }
+            }
+        }
+
+        // LAYER 3: Draw visualizer text labels
+        for (int r = 0; r < 8; r++) {
+            for (int c = 0; c < 8; c++) {
+                String text = state.tileTexts[r][c];
+                boolean isPersistentValid = state.persistentValids[r][c];
+                boolean isPersistentInvalid = state.persistentInvalids[r][c];
+
+                if (text == null) text = "";
+
+                if (!text.isEmpty()) {
+                    drawCenteredMultiLineString(g2, text, w, h, r, c, state.highlights[r][c]);
+                } else if (isPersistentValid) {
+                    drawCenteredMultiLineString(g2, "Valid", w, h, r, c, 3);
+                } else if (isPersistentInvalid) {
+                    drawCenteredMultiLineString(g2, "Invalid", w, h, r, c, 4);
+                }
+            }
+        }
+    }
+
+    // Frame-by-Frame Bitboard Shifting History Generator
+    private void generateBitboardHistory() {
+        vizHistory.clear();
+        historyIndex = -1;
+
+        int[][] curHighlights = new int[8][8];
+        boolean[][] persistentValids = new boolean[8][8]; 
+        boolean[][] persistentInvalids = new boolean[8][8]; 
+        boolean[][] checked = new boolean[8][8]; 
+
+        int opponent = (currentPlayer == BLACK) ? WHITE : BLACK;
+
+        for (int d = 0; d < 8; d++) {
+            int dr = DR[d];
+            int dc = DC[d];
+            String dirName = DIR_NAMES[d];
+
+            boolean[][] dirInvalids = new boolean[8][8];
+            for (int r = 0; r < 8; r++) {
+                for (int c = 0; c < 8; c++) {
+                    if (game.getPieceAt(r, c) == EMPTY) {
+                        int prevR = r - dr;
+                        int prevC = c - dc;
+                        if (prevR >= 0 && prevR < 8 && prevC >= 0 && prevC < 8) {
+                            if (game.getPieceAt(prevR, prevC) == currentPlayer) dirInvalids[r][c] = true;
+                        }
+                    }
+                }
+            }
+
+            // --- Step 0 ---
+            clearArray(curHighlights);
+            String[][] step0Texts = new String[8][8];
+            String[][] step0Markers = new String[8][8];
+            
+            for (int r = 0; r < 8; r++) {
+                for (int c = 0; c < 8; c++) {
+                    if (game.getPieceAt(r, c) == currentPlayer) {
+                        curHighlights[r][c] = 6; 
+                    }
+                }
+            }
+
+            for (int r = 0; r < 8; r++) {
+                for (int c = 0; c < 8; c++) {
+                    boolean isCandidate = isPotentialBitboardTarget(r, c, currentPlayer, d) || dirInvalids[r][c];
+                    if (isCandidate) {
+                        curHighlights[r][c] = 1; 
+                        if (persistentValids[r][c]) {
+                            step0Texts[r][c] = "Valid"; 
+                            step0Markers[r][c] = "✓";
+                        } else {
+                            step0Texts[r][c] = "Evaluating";
+                            step0Markers[r][c] = "?"; 
+                        }
+                    } else {
+                        if (persistentValids[r][c]) {
+                            curHighlights[r][c] = 3; 
+                            step0Texts[r][c] = "Valid";
+                            step0Markers[r][c] = "✓";
+                        } else if (persistentInvalids[r][c]) {
+                            curHighlights[r][c] = 4; 
+                            step0Texts[r][c] = "Invalid";
+                            step0Markers[r][c] = "X";
+                        }
+                    }
+                }
+            }
+            
+            VizState step0State = new VizState(-1, -1, d, 0, persistentValids, persistentInvalids, curHighlights, 
+                    String.format("[Bitboard] Step 0: Identify own pieces and evaluation candidates in direction %s", dirName));
+            step0State.setTileTexts(step0Texts);
+            step0State.setMarkers(step0Markers);
+            vizHistory.add(step0State);
+
+            // --- Step 1 ---
+            clearArray(curHighlights);
+            String[][] step1Texts = new String[8][8];
+            String[][] step1Markers = new String[8][8];
+            List<int[]> step1Arrows = new ArrayList<>();
+            List<int[]> step1WallHits = new ArrayList<>();
+
+            for (int r = 0; r < 8; r++) {
+                for (int c = 0; c < 8; c++) {
+                    if (game.getPieceAt(r, c) == currentPlayer) {
+                        curHighlights[r][c] = 6; 
+                    }
+                }
+            }
+
+            for (int r = 0; r < 8; r++) {
+                for (int c = 0; c < 8; c++) {
+                    boolean isCandidate = isPotentialBitboardTarget(r, c, currentPlayer, d) || dirInvalids[r][c];
+                    if (isCandidate && !dirInvalids[r][c]) {
+                        if (persistentValids[r][c]) {
+                            curHighlights[r][c] = 1; 
+                            step1Texts[r][c] = "Valid"; 
+                            step1Markers[r][c] = "✓"; 
+                        } else {
+                            curHighlights[r][c] = 1; 
+                            step1Texts[r][c] = "Evaluating";
+                            step1Markers[r][c] = "?";
+                        }
+                    } else if (!isCandidate) {
+                        if (persistentValids[r][c]) {
+                            curHighlights[r][c] = 3;
+                            step1Texts[r][c] = "Valid";
+                            step1Markers[r][c] = "✓";
+                        } else if (persistentInvalids[r][c]) {
+                            curHighlights[r][c] = 4;
+                            step1Texts[r][c] = "Invalid";
+                            step1Markers[r][c] = "X";
+                        }
+                    }
+                }
+            }
+
+            for (int r = 0; r < 8; r++) {
+                for (int c = 0; c < 8; c++) {
+                    int prevR = r - dr;
+                    int prevC = c - dc;
+                    if (prevR >= 0 && prevR < 8 && prevC >= 0 && prevC < 8) {
+                        if (game.getPieceAt(prevR, prevC) == currentPlayer) {
+                            int destPiece = game.getPieceAt(r, c);
+                            if (destPiece == EMPTY) {
+                                if (persistentValids[r][c]) {
+                                    curHighlights[r][c] = 4; 
+                                    step1Texts[r][c] = "Valid"; 
+                                    step1Markers[r][c] = "✓"; 
+                                } else {
+                                    curHighlights[r][c] = 4; 
+                                    step1Texts[r][c] = "Invalid";
+                                    step1Markers[r][c] = "X"; 
+                                }
+                                step1Arrows.add(new int[]{prevR, prevC, r, c, 2}); 
+                                checked[r][c] = true;
+                            } else if (destPiece == opponent) {
+                                curHighlights[r][c] = 5; 
+                                step1Markers[r][c] = "✓";
+                                step1Arrows.add(new int[]{prevR, prevC, r, c, 1}); 
+                            } else if (destPiece == currentPlayer) {
+                                curHighlights[r][c] = 4; 
+                                step1Markers[r][c] = "X";
+                                step1Texts[r][c] = "Own Piece"; 
+                                step1Arrows.add(new int[]{prevR, prevC, r, c, 2}); 
+                            }
+                        }
+                    }
+                    
+                    if (game.getPieceAt(r, c) == currentPlayer) {
+                        int nextR = r + dr;
+                        int nextC = c + dc;
+                        if (nextR < 0 || nextR >= 8 || nextC < 0 || nextC >= 8) {
+                            curHighlights[r][c] = 4; 
+                            step1WallHits.add(new int[]{r, c, r, c, nextR, nextC});
+                            step1Texts[r][c] = "End of board";
+                        }
+                    }
+                }
+            }
+
+            VizState step1State = new VizState(-1, -1, d, 1, persistentValids, persistentInvalids, curHighlights, String.format("[Bitboard] Step 1: Shift friendly board by 1 position in direction %s", dirName));
+            step1State.setTileTexts(step1Texts);
+            step1State.setMarkers(step1Markers);
+            step1State.arrows = step1Arrows;
+            step1State.wallHits = step1WallHits;
+            vizHistory.add(step1State);
+
+            // --- Step 2 ---
+            clearArray(curHighlights);
+            String[][] step2Texts = new String[8][8];
+            String[][] step2Markers = new String[8][8];
+            List<int[]> step2Arrows = new ArrayList<>();
+
+            for (int r = 0; r < 8; r++) {
+                for (int c = 0; c < 8; c++) {
+                    if (game.getPieceAt(r, c) == currentPlayer) {
+                        curHighlights[r][c] = 6; 
+                    }
+                }
+            }
+
+            for (int r = 0; r < 8; r++) {
+                for (int c = 0; c < 8; c++) {
+                    if (dirInvalids[r][c]) {
+                        if (persistentValids[r][c]) {
+                            curHighlights[r][c] = 3; 
+                            step2Texts[r][c] = "Valid"; 
+                            step2Markers[r][c] = "✓"; 
+                        } else {
+                            curHighlights[r][c] = 4; 
+                            step2Texts[r][c] = "Invalid";
+                            step2Markers[r][c] = "X";
+                        }
+                    } else {
+                        boolean isCandidate = isPotentialBitboardTarget(r, c, currentPlayer, d);
+                        if (isCandidate) {
+                            if (persistentValids[r][c]) {
+                                curHighlights[r][c] = 1; 
+                                step2Texts[r][c] = "Valid"; 
+                                step2Markers[r][c] = "✓";
+                            } else {
+                                curHighlights[r][c] = 1; 
+                                step2Texts[r][c] = "Evaluating";
+                                step2Markers[r][c] = "?";
+                            }
+                        } else {
+                            if (persistentValids[r][c]) {
+                                curHighlights[r][c] = 3;
+                                step2Texts[r][c] = "Valid";
+                                step2Markers[r][c] = "✓";
+                            } else if (persistentInvalids[r][c]) {
+                                curHighlights[r][c] = 4;
+                                step2Texts[r][c] = "Invalid";
+                                step2Markers[r][c] = "X";
+                            }
+                        }
+                    }
+                }
+            }
+
+            for (int r = 0; r < 8; r++) {
+                for (int c = 0; c < 8; c++) {
+                    if (game.getPieceAt(r, c) == currentPlayer) {
+                        int currR = r + dr;
+                        int currC = c + dc;
+                        List<int[]> scannedOpponents = new ArrayList<>();
+                        
+                        while (currR >= 0 && currR < 8 && currC >= 0 && currC < 8 && game.getPieceAt(currR, currC) == opponent) {
+                            scannedOpponents.add(new int[]{currR, currC});
+                            currR += dr;
+                            currC += dc;
+                        }
+                        
+                        if (!scannedOpponents.isEmpty()) {
+                            int[] firstOpp = scannedOpponents.get(0);
+                            int[] lastOpp = scannedOpponents.get(scannedOpponents.size() - 1);
+                            
+                            int stepIndex = 1;
+                            for (int[] opp : scannedOpponents) {
+                                curHighlights[opp[0]][opp[1]] = 2; 
+                                step2Markers[opp[0]][opp[1]] = String.valueOf(stepIndex++); 
+                            }
+                            
+                            step2Arrows.add(new int[]{firstOpp[0], firstOpp[1], lastOpp[0], lastOpp[1], 1}); 
+                        }
+                    }
+                }
+            }
+
+            VizState step2State = new VizState(-1, -1, d, 2, persistentValids, persistentInvalids, curHighlights, String.format("[Bitboard] Step 2: Mask shifted friendly board with opponent pieces in direction %s", dirName));
+            step2State.setTileTexts(step2Texts);
+            step2State.setMarkers(step2Markers);
+            step2State.arrows = step2Arrows;
+            vizHistory.add(step2State);
+
+            // --- Step 3 ---
+            clearArray(curHighlights);
+            String[][] step3Texts = new String[8][8];
+            String[][] step3Markers = new String[8][8];
+            List<int[]> step3Arrows = new ArrayList<>();
+            List<int[]> step3WallHits = new ArrayList<>();
+
+            for (int r = 0; r < 8; r++) {
+                for (int c = 0; c < 8; c++) {
+                    if (game.getPieceAt(r, c) == currentPlayer) {
+                        curHighlights[r][c] = 6; 
+                    }
+                }
+            }
+
+            for (int r = 0; r < 8; r++) {
+                for (int c = 0; c < 8; c++) {
+                    if (dirInvalids[r][c]) {
+                        if (persistentValids[r][c]) {
+                            curHighlights[r][c] = 3; 
+                            step3Texts[r][c] = "Valid"; 
+                            step3Markers[r][c] = "✓"; 
+                        } else {
+                            curHighlights[r][c] = 4; 
+                            step3Texts[r][c] = "Invalid";
+                            step3Markers[r][c] = "X";
+                        }
+                    } else {
+                        boolean isCandidate = isPotentialBitboardTarget(r, c, currentPlayer, d);
+                        if (isCandidate) {
+                            if (persistentValids[r][c]) {
+                                curHighlights[r][c] = 1; 
+                                step3Texts[r][c] = "Valid"; 
+                                step3Markers[r][c] = "✓";
+                            } else {
+                                curHighlights[r][c] = 1; 
+                                step3Texts[r][c] = "Evaluating";
+                                step3Markers[r][c] = "?";
+                            }
+                        } else {
+                            if (persistentValids[r][c]) {
+                                curHighlights[r][c] = 3;
+                                step3Texts[r][c] = "Valid";
+                                step3Markers[r][c] = "✓";
+                            } else if (persistentInvalids[r][c]) {
+                                curHighlights[r][c] = 4;
+                                step3Texts[r][c] = "Invalid";
+                                step3Markers[r][c] = "X";
+                            }
+                        }
+                    }
+                }
+            }
+
+            for (int r = 0; r < 8; r++) {
+                for (int c = 0; c < 8; c++) {
+                    if (game.getPieceAt(r, c) == currentPlayer) {
+                        int currR = r + dr;
+                        int currC = c + dc;
+                        int count = 0;
+                        while (currR >= 0 && currR < 8 && currC >= 0 && currC < 8 && game.getPieceAt(currR, currC) == opponent) {
+                            count++;
+                            currR += dr;
+                            currC += dc;
+                        }
+                        
+                        if (count > 0) {
+                            int nextR = currR;
+                            int nextC = currC;
+                            int lastOppR = currR - dr;
+                            int lastOppC = currC - dc;
+                            
+                            if (nextR < 0 || nextR >= 8 || nextC < 0 || nextC >= 8) {
+                                curHighlights[lastOppR][lastOppC] = 4; 
+                                step3WallHits.add(new int[]{r, c, lastOppR, lastOppC, nextR, nextC});
+                                step3Texts[lastOppR][lastOppC] = "End of board";
+                            } else {
+                                int nextPiece = game.getPieceAt(nextR, nextC);
+                                if (nextPiece == EMPTY) {
+                                    curHighlights[nextR][nextC] = 3; 
+                                    persistentValids[nextR][nextC] = true;
+                                    step3Markers[nextR][nextC] = "✓";
+                                    step3Texts[nextR][nextC] = "Valid";
+                                    step3Arrows.add(new int[]{r, c, nextR, nextC, 3}); 
+                                    checked[nextR][nextC] = true;
+                                } else if (nextPiece == currentPlayer) {
+                                    if (persistentValids[nextR][nextC]) {
+                                        curHighlights[nextR][nextC] = 4; 
+                                        step3Texts[nextR][nextC] = "Valid"; 
+                                        step3Markers[nextR][nextC] = "✓"; 
+                                    } else {
+                                        curHighlights[nextR][nextC] = 4; 
+                                        step3Markers[nextR][nextC] = "X";
+                                        step3Texts[nextR][nextC] = "Own Piece"; 
+                                    }
+                                    step3Arrows.add(new int[]{r, c, nextR, nextC, 2}); 
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            VizState step3State = new VizState(-1, -1, d, 3, persistentValids, persistentInvalids, curHighlights, String.format("[Bitboard] Step 3: Shift recursively and mask with empty spaces in direction %s", dirName));
+            step3State.setTileTexts(step3Texts);
+            step3State.setMarkers(step3Markers);
+            step3State.arrows = step3Arrows;
+            step3State.wallHits = step3WallHits;
+            vizHistory.add(step3State);
+        }
+
+        clearArray(curHighlights);
+        String[][] finalMarkers = new String[8][8];
+        String[][] finalTexts = new String[8][8];
+        for (int r = 0; r < 8; r++) {
+            for (int c = 0; c < 8; c++) {
+                if (game.getPieceAt(r, c) == EMPTY) {
+                    if (persistentValids[r][c]) {
+                        curHighlights[r][c] = 3; 
+                        finalMarkers[r][c] = "✓";
+                        finalTexts[r][c] = "Valid";
+                    } else {
+                        if (checked[r][c]) {
+                            curHighlights[r][c] = 4; 
+                            finalTexts[r][c] = "Invalid";
+                            finalMarkers[r][c] = "X";
+                        }
+                    }
+                }
+            }
+        }
+        
+        VizState finalState = new VizState(-1, -1, -1, 0, persistentValids, persistentInvalids, curHighlights, "Bitboard scan complete! All valid moves are highlighted.");
+        finalState.setMarkers(finalMarkers);
+        finalState.setTileTexts(finalTexts);
+        vizHistory.add(finalState);
     }
 
     public static void main(String[] args) {

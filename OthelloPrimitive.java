@@ -1,7 +1,7 @@
 import java.util.ArrayList;
 import java.util.List;
 
-public class OthelloCellObjects implements OthelloBoard {
+public class OthelloPrimitive implements OthelloBoard {
     public static final int BLACK = 1;
     public static final int WHITE = 2;
     public static final int EMPTY = 0;
@@ -20,19 +20,7 @@ public class OthelloCellObjects implements OthelloBoard {
     private static final int[] DR = {0, 1, 1, 1, 0, -1, -1, -1};
     private static final int[] DC = {1, 1, 0, -1, -1, -1, 0, 1};
 
-    private static class Cell {
-        int row;
-        int col;
-        int piece;
-
-        Cell(int row, int col, int piece) {
-            this.row = row;
-            this.col = col;
-            this.piece = piece;
-        }
-    }
-
-    private final Cell[][] board = new Cell[8][8];
+    private final int[][] board = new int[8][8];
     private boolean useAlphaBeta = true;
     private boolean useMoveOrdering = true;
 
@@ -45,27 +33,22 @@ public class OthelloCellObjects implements OthelloBoard {
     private final UndoState[] undoStack = new UndoState[64];
     private final int[][][] moveStack = new int[64][64][2]; 
     private final int[] moveCountStack = new int[64];
+    private final boolean[][][] checkedStack = new boolean[64][8][8];
 
-    public OthelloCellObjects() {
+    public OthelloPrimitive() {
         this.nodeCounter = new NodeCounter();
         
         for (int i = 0; i < 64; i++) {
             undoStack[i] = new UndoState();
         }
 
-        for (int r = 0; r < 8; r++) {
-            for (int c = 0; c < 8; c++) {
-                board[r][c] = new Cell(r, c, EMPTY);
-            }
-        }
-
-        board[3][4].piece = BLACK;
-        board[4][3].piece = BLACK;
-        board[3][3].piece = WHITE;
-        board[4][4].piece = WHITE;
+        board[3][4] = BLACK;
+        board[4][3] = BLACK;
+        board[3][3] = WHITE;
+        board[4][4] = WHITE;
     }
 
-    private OthelloCellObjects(NodeCounter counter) {
+    private OthelloPrimitive(NodeCounter counter) {
         this.nodeCounter = counter;
         for (int i = 0; i < 64; i++) {
             undoStack[i] = new UndoState();
@@ -94,12 +77,12 @@ public class OthelloCellObjects implements OthelloBoard {
 
     @Override
     public int getPieceAt(int r, int c) {
-        return board[r][c].piece;
+        return board[r][c];
     }
 
     @Override
     public void setPieceAt(int r, int c, int piece) {
-        board[r][c].piece = piece;
+        board[r][c] = piece;
     }
 
     @Override
@@ -107,7 +90,7 @@ public class OthelloCellObjects implements OthelloBoard {
         int count = 0;
         for (int r = 0; r < 8; r++) {
             for (int c = 0; c < 8; c++) {
-                if (board[r][c].piece == player) count++;
+                if (board[r][c] == player) count++;
             }
         }
         return count;
@@ -115,7 +98,7 @@ public class OthelloCellObjects implements OthelloBoard {
 
     @Override
     public boolean isValidMove(int r, int c, int player) {
-        if (board[r][c].piece != EMPTY) return false;
+        if (board[r][c] != EMPTY) return false;
         int opponent = (player == BLACK) ? WHITE : BLACK;
 
         for (int d = 0; d < 8; d++) {
@@ -126,13 +109,13 @@ public class OthelloCellObjects implements OthelloBoard {
             int currCol = c + dc;
             int count = 0;
 
-            while (currRow >= 0 && currRow < 8 && currCol >= 0 && currCol < 8 && board[currRow][currCol].piece == opponent) {
+            while (currRow >= 0 && currRow < 8 && currCol >= 0 && currCol < 8 && board[currRow][currCol] == opponent) {
                 count++;
                 currRow += dr;
                 currCol += dc;
             }
 
-            if (count > 0 && currRow >= 0 && currRow < 8 && currCol >= 0 && currCol < 8 && board[currRow][currCol].piece == player) {
+            if (count > 0 && currRow >= 0 && currRow < 8 && currCol >= 0 && currCol < 8 && board[currRow][currCol] == player) {
                 return true;
             }
         }
@@ -142,12 +125,24 @@ public class OthelloCellObjects implements OthelloBoard {
     @Override
     public List<int[]> getValidMoves(int player) {
         List<int[]> moves = new ArrayList<>();
-        // Modified to use the primitive search algorithm (analyzing every empty space in all directions)
+        int opponent = (player == BLACK) ? WHITE : BLACK;
+        boolean[][] checked = new boolean[8][8];
+
         for (int r = 0; r < 8; r++) {
             for (int c = 0; c < 8; c++) {
-                if (board[r][c].piece == EMPTY) {
-                    if (isValidMove(r, c, player)) {
-                        moves.add(new int[]{r, c});
+                if (board[r][c] == opponent) {
+                    for (int d = 0; d < 8; d++) {
+                        int nr = r + DR[d];
+                        int nc = c + DC[d];
+
+                        if (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) {
+                            if (board[nr][nc] == EMPTY && !checked[nr][nc]) {
+                                checked[nr][nc] = true;
+                                if (isValidMove(nr, nc, player)) {
+                                    moves.add(new int[]{nr, nc});
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -156,19 +151,32 @@ public class OthelloCellObjects implements OthelloBoard {
     }
 
     private void generateMoves2D(int player, int ply) {
-        int count = 0;
-        // Modified to use the primitive search algorithm (analyzing every empty space in all directions)
-        for (int r = 0; r < 8; r++) {
-            for (int c = 0; c < 8; c++) {
-                if (board[r][c].piece == EMPTY) {
-                    if (isValidMove(r, c, player)) {
-                        moveStack[ply][count][0] = r;
-                        moveStack[ply][count][1] = c;
-                        count++;
+    int count = 0;
+    int opponent = (player == BLACK) ? WHITE : BLACK;
+    long visited = 0L;  // replaces checkedStack[ply] entirely
+
+    for (int r = 0; r < 8; r++) {
+        for (int c = 0; c < 8; c++) {
+            if (board[r][c] == opponent) {
+                for (int d = 0; d < 8; d++) {
+                    int nr = r + DR[d];
+                    int nc = c + DC[d];
+
+                    if (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) {
+                        long bit = 1L << (nr * 8 + nc);
+                        if (board[nr][nc] == EMPTY && (visited & bit) == 0) {
+                            visited |= bit;
+                            if (isValidMove(nr, nc, player)) {
+                                moveStack[ply][count][0] = nr;
+                                moveStack[ply][count][1] = nc;
+                                count++;
+                            }
+                        }
                     }
                 }
             }
         }
+    }
 
         if (useAlphaBeta && useMoveOrdering && count > 1) {
             for (int i = 1; i < count; i++) {
@@ -201,7 +209,7 @@ public class OthelloCellObjects implements OthelloBoard {
         undo.placedCol = c;
         undo.flippedCount = 0;
 
-        if (board[r][c].piece != EMPTY) return false;
+        if (board[r][c] != EMPTY) return false;
 
         for (int d = 0; d < 8; d++) {
             int dr = DR[d];
@@ -211,17 +219,17 @@ public class OthelloCellObjects implements OthelloBoard {
             int currCol = c + dc;
             int count = 0;
 
-            while (currRow >= 0 && currRow < 8 && currCol >= 0 && currCol < 8 && board[currRow][currCol].piece == opponent) {
+            while (currRow >= 0 && currRow < 8 && currCol >= 0 && currCol < 8 && board[currRow][currCol] == opponent) {
                 count++;
                 currRow += dr;
                 currCol += dc;
             }
 
-            if (currRow >= 0 && currRow < 8 && currCol >= 0 && currCol < 8 && board[currRow][currCol].piece == player) {
+            if (currRow >= 0 && currRow < 8 && currCol >= 0 && currCol < 8 && board[currRow][currCol] == player) {
                 int scanRow = r + dr;
                 int scanCol = c + dc;
                 for (int i = 0; i < count; i++) {
-                    board[scanRow][scanCol].piece = player;
+                    board[scanRow][scanCol] = player;
                     undo.flippedCoords[undo.flippedCount][0] = scanRow;
                     undo.flippedCoords[undo.flippedCount][1] = scanCol;
                     undo.flippedCount++;
@@ -232,7 +240,7 @@ public class OthelloCellObjects implements OthelloBoard {
         }
 
         if (undo.flippedCount > 0) {
-            board[r][c].piece = player;
+            board[r][c] = player;
             return true;
         }
         return false;
@@ -240,16 +248,38 @@ public class OthelloCellObjects implements OthelloBoard {
 
     private void undoMove(UndoState undo, int player) {
         int opponent = (player == BLACK) ? WHITE : BLACK;
-        board[undo.placedRow][undo.placedCol].piece = EMPTY;
+        board[undo.placedRow][undo.placedCol] = EMPTY;
         for (int i = 0; i < undo.flippedCount; i++) {
             int fr = undo.flippedCoords[i][0];
             int fc = undo.flippedCoords[i][1];
-            board[fr][fc].piece = opponent;
+            board[fr][fc] = opponent;
         }
     }
 
     private boolean hasValidMoves(int player) {
-        return !getValidMoves(player).isEmpty();
+        int opponent = (player == BLACK) ? WHITE : BLACK;
+        boolean[][] checked = new boolean[8][8];
+
+        for (int r = 0; r < 8; r++) {
+            for (int c = 0; c < 8; c++) {
+                if (board[r][c] == opponent) {
+                    for (int d = 0; d < 8; d++) {
+                        int nr = r + DR[d];
+                        int nc = c + DC[d];
+
+                        if (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) {
+                            if (board[nr][nc] == EMPTY && !checked[nr][nc]) {
+                                checked[nr][nc] = true;
+                                if (isValidMove(nr, nc, player)) {
+                                    return true;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return false;
     }
 
     @Override
@@ -267,14 +297,14 @@ public class OthelloCellObjects implements OthelloBoard {
     }
 
     @Override
-    public OthelloCellObjects copy() {
-        OthelloCellObjects copyObj = new OthelloCellObjects(this.nodeCounter);
+    public OthelloPrimitive copy() {
+        OthelloPrimitive copyObj = new OthelloPrimitive(this.nodeCounter);
         copyObj.useAlphaBeta = this.useAlphaBeta;
         copyObj.useMoveOrdering = this.useMoveOrdering;
         
         for (int r = 0; r < 8; r++) {
             for (int c = 0; c < 8; c++) {
-                copyObj.board[r][c] = new Cell(r, c, this.board[r][c].piece);
+                copyObj.board[r][c] = this.board[r][c];
             }
         }
         return copyObj;
@@ -299,7 +329,7 @@ public class OthelloCellObjects implements OthelloBoard {
 
         for (int r = 0; r < 8; r++) {
             for (int c = 0; c < 8; c++) {
-                int piece = board[r][c].piece;
+                int piece = board[r][c];
                 if (piece == EMPTY) continue;
 
                 int scoreFactor = (piece == originalPlayer) ? 1 : -1;
@@ -411,7 +441,7 @@ public class OthelloCellObjects implements OthelloBoard {
         nodeCounter.count = 0;
         nodeCounter.evaluations = 0;
 
-        OthelloCellObjects searchBoard = copy();
+        OthelloPrimitive searchBoard = copy();
         return searchBoard.findBestMoveInternal(player, depth);
     }
 
@@ -475,7 +505,7 @@ public class OthelloCellObjects implements OthelloBoard {
         long totalChildMoves = 0;
 
         for (int[] move : rootMoves) {
-            OthelloCellObjects child = copy();
+            OthelloPrimitive child = copy();
             child.makeMove(move[0], move[1], player);
             totalChildMoves += child.getValidMoves(opponent).size();
         }

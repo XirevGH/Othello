@@ -1,5 +1,3 @@
-package Algoritmdesigntekniker;
-
 import java.util.List;
 
 public interface OthelloBoard {
