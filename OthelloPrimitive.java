@@ -31,13 +31,14 @@ public class OthelloPrimitive implements OthelloBoard {
     private final NodeCounter nodeCounter;
 
     private final UndoState[] undoStack = new UndoState[64];
-    private final int[][][] moveStack = new int[64][64][2]; 
+
+    private final int[] moveStackR = new int[64 * 64];
+    private final int[] moveStackC = new int[64 * 64];
     private final int[] moveCountStack = new int[64];
-    private final boolean[][][] checkedStack = new boolean[64][8][8];
 
     public OthelloPrimitive() {
         this.nodeCounter = new NodeCounter();
-        
+
         for (int i = 0; i < 64; i++) {
             undoStack[i] = new UndoState();
         }
@@ -126,7 +127,7 @@ public class OthelloPrimitive implements OthelloBoard {
     public List<int[]> getValidMoves(int player) {
         List<int[]> moves = new ArrayList<>();
         int opponent = (player == BLACK) ? WHITE : BLACK;
-        boolean[][] checked = new boolean[8][8];
+        long visited = 0L;
 
         for (int r = 0; r < 8; r++) {
             for (int c = 0; c < 8; c++) {
@@ -136,8 +137,9 @@ public class OthelloPrimitive implements OthelloBoard {
                         int nc = c + DC[d];
 
                         if (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) {
-                            if (board[nr][nc] == EMPTY && !checked[nr][nc]) {
-                                checked[nr][nc] = true;
+                            long bit = 1L << (nr * 8 + nc);
+                            if (board[nr][nc] == EMPTY && (visited & bit) == 0) {
+                                visited |= bit;
                                 if (isValidMove(nr, nc, player)) {
                                     moves.add(new int[]{nr, nc});
                                 }
@@ -151,46 +153,47 @@ public class OthelloPrimitive implements OthelloBoard {
     }
 
     private void generateMoves2D(int player, int ply) {
-    int count = 0;
-    int opponent = (player == BLACK) ? WHITE : BLACK;
-    long visited = 0L;  // replaces checkedStack[ply] entirely
+        int count = 0;
+        int opponent = (player == BLACK) ? WHITE : BLACK;
+        long visited = 0L;
+        int base = ply * 64; 
 
-    for (int r = 0; r < 8; r++) {
-        for (int c = 0; c < 8; c++) {
-            if (board[r][c] == opponent) {
-                for (int d = 0; d < 8; d++) {
-                    int nr = r + DR[d];
-                    int nc = c + DC[d];
+        for (int r = 0; r < 8; r++) {
+            for (int c = 0; c < 8; c++) {
+                if (board[r][c] == opponent) {
+                    for (int d = 0; d < 8; d++) {
+                        int nr = r + DR[d];
+                        int nc = c + DC[d];
 
-                    if (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) {
-                        long bit = 1L << (nr * 8 + nc);
-                        if (board[nr][nc] == EMPTY && (visited & bit) == 0) {
-                            visited |= bit;
-                            if (isValidMove(nr, nc, player)) {
-                                moveStack[ply][count][0] = nr;
-                                moveStack[ply][count][1] = nc;
-                                count++;
+                        if (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) {
+                            long bit = 1L << (nr * 8 + nc);
+                            if (board[nr][nc] == EMPTY && (visited & bit) == 0) {
+                                visited |= bit;
+                                if (isValidMove(nr, nc, player)) {
+                                    moveStackR[base + count] = nr;
+                                    moveStackC[base + count] = nc;
+                                    count++;
+                                }
                             }
                         }
                     }
                 }
             }
         }
-    }
 
         if (useAlphaBeta && useMoveOrdering && count > 1) {
             for (int i = 1; i < count; i++) {
-                int mr = moveStack[ply][i][0];
-                int mc = moveStack[ply][i][1];
+                int mr = moveStackR[base + i];
+                int mc = moveStackC[base + i];
                 int weight = STATIC_WEIGHTS[mr][mc];
                 int j = i - 1;
-                while (j >= 0 && STATIC_WEIGHTS[moveStack[ply][j][0]][moveStack[ply][j][1]] < weight) {
-                    moveStack[ply][j + 1][0] = moveStack[ply][j][0];
-                    moveStack[ply][j + 1][1] = moveStack[ply][j][1];
+                while (j >= 0 && STATIC_WEIGHTS[moveStackR[base + j]][moveStackC[base + j]] < weight) {
+                    moveStackR[base + j + 1] = moveStackR[base + j];
+                    moveStackC[base + j + 1] = moveStackC[base + j];
                     j--;
                 }
-                moveStack[ply][j + 1][0] = mr;
-                moveStack[ply][j + 1][1] = mc;
+                moveStackR[base + j + 1] = mr;
+                moveStackC[base + j + 1] = mc;
             }
         }
 
@@ -258,7 +261,7 @@ public class OthelloPrimitive implements OthelloBoard {
 
     private boolean hasValidMoves(int player) {
         int opponent = (player == BLACK) ? WHITE : BLACK;
-        boolean[][] checked = new boolean[8][8];
+        long visited = 0L;
 
         for (int r = 0; r < 8; r++) {
             for (int c = 0; c < 8; c++) {
@@ -268,8 +271,9 @@ public class OthelloPrimitive implements OthelloBoard {
                         int nc = c + DC[d];
 
                         if (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) {
-                            if (board[nr][nc] == EMPTY && !checked[nr][nc]) {
-                                checked[nr][nc] = true;
+                            long bit = 1L << (nr * 8 + nc);
+                            if (board[nr][nc] == EMPTY && (visited & bit) == 0) {
+                                visited |= bit;
                                 if (isValidMove(nr, nc, player)) {
                                     return true;
                                 }
@@ -301,7 +305,7 @@ public class OthelloPrimitive implements OthelloBoard {
         OthelloPrimitive copyObj = new OthelloPrimitive(this.nodeCounter);
         copyObj.useAlphaBeta = this.useAlphaBeta;
         copyObj.useMoveOrdering = this.useMoveOrdering;
-        
+
         for (int r = 0; r < 8; r++) {
             for (int c = 0; c < 8; c++) {
                 copyObj.board[r][c] = this.board[r][c];
@@ -374,6 +378,7 @@ public class OthelloPrimitive implements OthelloBoard {
             return minimax(depth, alpha, beta, !isMaximizing, currentOpponent, originalPlayer, ply + 1);
         }
 
+        int base = ply * 64;
         int currentOpponent = (player == BLACK) ? WHITE : BLACK;
         if (isMaximizing) {
             int maxEval = Integer.MIN_VALUE;
@@ -382,15 +387,15 @@ public class OthelloPrimitive implements OthelloBoard {
                     return 0;
                 }
 
-                int mr = moveStack[ply][i][0];
-                int mc = moveStack[ply][i][1];
+                int mr = moveStackR[base + i];
+                int mc = moveStackC[base + i];
 
                 UndoState undo = undoStack[ply];
                 makeMoveRecord(mr, mc, player, undo);
 
-                int eval = minimax(depth - 1, 
-                                   useAlphaBeta ? alpha : Integer.MIN_VALUE, 
-                                   useAlphaBeta ? beta : Integer.MAX_VALUE, 
+                int eval = minimax(depth - 1,
+                                   useAlphaBeta ? alpha : Integer.MIN_VALUE,
+                                   useAlphaBeta ? beta : Integer.MAX_VALUE,
                                    false, currentOpponent, originalPlayer, ply + 1);
 
                 undoMove(undo, player);
@@ -411,15 +416,15 @@ public class OthelloPrimitive implements OthelloBoard {
                     return 0;
                 }
 
-                int mr = moveStack[ply][i][0];
-                int mc = moveStack[ply][i][1];
+                int mr = moveStackR[base + i];
+                int mc = moveStackC[base + i];
 
                 UndoState undo = undoStack[ply];
                 makeMoveRecord(mr, mc, player, undo);
 
-                int eval = minimax(depth - 1, 
-                                   useAlphaBeta ? alpha : Integer.MIN_VALUE, 
-                                   useAlphaBeta ? beta : Integer.MAX_VALUE, 
+                int eval = minimax(depth - 1,
+                                   useAlphaBeta ? alpha : Integer.MIN_VALUE,
+                                   useAlphaBeta ? beta : Integer.MAX_VALUE,
                                    true, currentOpponent, originalPlayer, ply + 1);
 
                 undoMove(undo, player);
@@ -459,10 +464,12 @@ public class OthelloPrimitive implements OthelloBoard {
         int alpha = Integer.MIN_VALUE;
         int beta = Integer.MAX_VALUE;
 
-        int[][] rootMoves = new int[moveCount][2];
+        // Snapshot root moves before recursion (Flat Memory Layout)
+        int[] rootMovesR = new int[moveCount];
+        int[] rootMovesC = new int[moveCount];
         for (int i = 0; i < moveCount; i++) {
-            rootMoves[i][0] = moveStack[0][i][0];
-            rootMoves[i][1] = moveStack[0][i][1];
+            rootMovesR[i] = moveStackR[i];
+            rootMovesC[i] = moveStackC[i];
         }
 
         for (int i = 0; i < moveCount; i++) {
@@ -470,22 +477,22 @@ public class OthelloPrimitive implements OthelloBoard {
                 return -1;
             }
 
-            int mr = rootMoves[i][0];
-            int mc = rootMoves[i][1];
+            int mr = rootMovesR[i];
+            int mc = rootMovesC[i];
 
             UndoState undo = undoStack[0];
             makeMoveRecord(mr, mc, player, undo);
 
-            int eval = minimax(depth - 1, 
-                               useAlphaBeta ? alpha : Integer.MIN_VALUE, 
-                               useAlphaBeta ? beta : Integer.MAX_VALUE, 
+            int eval = minimax(depth - 1,
+                               useAlphaBeta ? alpha : Integer.MIN_VALUE,
+                               useAlphaBeta ? beta : Integer.MAX_VALUE,
                                false, currentOpponent, player, 1);
 
             undoMove(undo, player);
 
             if (eval > bestScore) {
                 bestScore = eval;
-                bestMove = mr * 8 + mc; 
+                bestMove = mr * 8 + mc;
             }
             if (useAlphaBeta) {
                 alpha = Math.max(alpha, bestScore);

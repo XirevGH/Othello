@@ -43,7 +43,8 @@ public class OthelloCellObjects implements OthelloBoard {
     private final NodeCounter nodeCounter;
 
     private final UndoState[] undoStack = new UndoState[64];
-    private final int[][][] moveStack = new int[64][64][2]; 
+    private final int[] moveStackR = new int[64 * 64];
+    private final int[] moveStackC = new int[64 * 64];
     private final int[] moveCountStack = new int[64];
 
     public OthelloCellObjects() {
@@ -142,7 +143,6 @@ public class OthelloCellObjects implements OthelloBoard {
     @Override
     public List<int[]> getValidMoves(int player) {
         List<int[]> moves = new ArrayList<>();
-        // Modified to use the primitive search algorithm (analyzing every empty space in all directions)
         for (int r = 0; r < 8; r++) {
             for (int c = 0; c < 8; c++) {
                 if (board[r][c].piece == EMPTY) {
@@ -157,13 +157,12 @@ public class OthelloCellObjects implements OthelloBoard {
 
     private void generateMoves2D(int player, int ply) {
         int count = 0;
-        // Modified to use the primitive search algorithm (analyzing every empty space in all directions)
         for (int r = 0; r < 8; r++) {
             for (int c = 0; c < 8; c++) {
                 if (board[r][c].piece == EMPTY) {
                     if (isValidMove(r, c, player)) {
-                        moveStack[ply][count][0] = r;
-                        moveStack[ply][count][1] = c;
+                        moveStackR[ply * 64 + count] = r;
+                        moveStackC[ply * 64 + count] = c;
                         count++;
                     }
                 }
@@ -172,17 +171,17 @@ public class OthelloCellObjects implements OthelloBoard {
 
         if (useAlphaBeta && useMoveOrdering && count > 1) {
             for (int i = 1; i < count; i++) {
-                int mr = moveStack[ply][i][0];
-                int mc = moveStack[ply][i][1];
+                int mr = moveStackR[ply * 64 + i];
+                int mc = moveStackC[ply * 64 + i];
                 int weight = STATIC_WEIGHTS[mr][mc];
                 int j = i - 1;
-                while (j >= 0 && STATIC_WEIGHTS[moveStack[ply][j][0]][moveStack[ply][j][1]] < weight) {
-                    moveStack[ply][j + 1][0] = moveStack[ply][j][0];
-                    moveStack[ply][j + 1][1] = moveStack[ply][j][1];
+                while (j >= 0 && STATIC_WEIGHTS[moveStackR[ply * 64 + j]][moveStackC[ply * 64 + j]] < weight) {
+                    moveStackR[ply * 64 + j + 1] = moveStackR[ply * 64 + j];
+                    moveStackC[ply * 64 + j + 1] = moveStackC[ply * 64 + j];
                     j--;
                 }
-                moveStack[ply][j + 1][0] = mr;
-                moveStack[ply][j + 1][1] = mc;
+                moveStackR[ply * 64 + j + 1] = mr;
+                moveStackC[ply * 64 + j + 1] = mc;
             }
         }
 
@@ -352,8 +351,8 @@ public class OthelloCellObjects implements OthelloBoard {
                     return 0;
                 }
 
-                int mr = moveStack[ply][i][0];
-                int mc = moveStack[ply][i][1];
+                int mr = moveStackR[ply * 64 + i];
+                int mc = moveStackC[ply * 64 + i];
 
                 UndoState undo = undoStack[ply];
                 makeMoveRecord(mr, mc, player, undo);
@@ -381,8 +380,8 @@ public class OthelloCellObjects implements OthelloBoard {
                     return 0;
                 }
 
-                int mr = moveStack[ply][i][0];
-                int mc = moveStack[ply][i][1];
+                int mr = moveStackR[ply * 64 + i];
+                int mc = moveStackC[ply * 64 + i];
 
                 UndoState undo = undoStack[ply];
                 makeMoveRecord(mr, mc, player, undo);
@@ -431,8 +430,8 @@ public class OthelloCellObjects implements OthelloBoard {
 
         int[][] rootMoves = new int[moveCount][2];
         for (int i = 0; i < moveCount; i++) {
-            rootMoves[i][0] = moveStack[0][i][0];
-            rootMoves[i][1] = moveStack[0][i][1];
+            rootMoves[i][0] = moveStackR[0 * 64 + i];
+            rootMoves[i][1] = moveStackC[0 * 64 + i];
         }
 
         for (int i = 0; i < moveCount; i++) {

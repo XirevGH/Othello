@@ -1251,7 +1251,9 @@ public class OthelloGUI extends JFrame {
         if (text.isEmpty()) return;
 
         int fontSize = 9;
-        if (text.equals("Valid") || text.equals("Invalid") || text.equals("Evaluating") || text.equals("End of board") || text.equals("Edge of board") || text.equals("Empty") || text.equals("Own Piece") || text.equals("Skip")) {
+        if (text.equals("Valid") || text.equals("Invalid") || text.equals("Evaluating") || 
+            text.equals("End of board") || text.equals("Empty") || 
+            text.equals("Own Piece") || text.equals("Skip") || text.equals("Opponent")) {
             fontSize = 14; 
         }
 
@@ -1297,7 +1299,7 @@ public class OthelloGUI extends JFrame {
                 g2.setColor(new Color(255, 215, 0)); 
             } else if (text.equals("Skip")) {
                 g2.setColor(new Color(160, 32, 240)); 
-            } else if (text.equals("Invalid") || text.equals("End of board") || text.equals("Edge of board") || text.equals("Empty") || text.equals("Own Piece")) {
+            } else if (text.equals("Invalid") || text.equals("End of board") || text.equals("Empty") || text.equals("Own Piece") || text.equals("Opponent")) {
                 g2.setColor(new Color(255, 50, 50)); 
             } else if (text.equals("Evaluating")) {
                 g2.setColor(Color.WHITE); 
@@ -2226,28 +2228,99 @@ public class OthelloGUI extends JFrame {
                     int nc = c + DC[d];
                     String dirName = DIR_NAMES[d];
 
-                    if (nr < 0 || nr >= 8 || nc < 0 || nc >= 8) continue;
+                    // 1. Check Out of Bounds
+                    if (nr < 0 || nr >= 8 || nc < 0 || nc >= 8) {
+                        clearArray(curHighlights);
+                        String[][] oobTexts = new String[8][8];
+                        String[][] oobMarkers = new String[8][8];
+                        applyOOCandidateHighlights(curHighlights, oobTexts, oobMarkers, evaluated, persistentValids, persistentInvalids, -1, -1, false);
+                        
+                        curHighlights[r][c] = 2; // Opponent yellow cursor
+                        
+                        VizState oobState = new VizState(r, c, d, 0, persistentValids, persistentInvalids, curHighlights,
+                                String.format("Probing neighbor %s: Out of bounds. Skipping.", dirName));
+                        oobState.wallHits.add(new int[]{r, c, r, c, nr, nc});
+                        oobState.setTileTexts(oobTexts);
+                        oobState.setMarkers(oobMarkers);
+                        vizHistory.add(oobState);
+                        continue;
+                    }
                     
                     int neighborPiece = game.getPieceAt(nr, nc);
-                    if (neighborPiece != EMPTY || checked[nr][nc]) continue;
+                    String neighborCellName = OthelloBitboard.indexToAlgebraic(nr * 8 + nc);
 
+                    // 2. Check if Occupied
+                    if (neighborPiece != EMPTY) {
+                        clearArray(curHighlights);
+                        String[][] occupiedTexts = new String[8][8];
+                        String[][] occupiedMarkers = new String[8][8];
+                        applyOOCandidateHighlights(curHighlights, occupiedTexts, occupiedMarkers, evaluated, persistentValids, persistentInvalids, -1, -1, false);
+                        
+                        curHighlights[r][c] = 2; // Opponent yellow cursor
+                        curHighlights[nr][nc] = 4; // Red highlight on occupied target
+                        occupiedTexts[nr][nc] = (neighborPiece == currentPlayer) ? "Own Piece" : "Opponent";
+                        occupiedMarkers[nr][nc] = "X";
+                        
+                        String pieceType = (neighborPiece == currentPlayer) ? "friendly" : "opponent";
+                        VizState occupiedState = new VizState(r, c, d, 0, persistentValids, persistentInvalids, curHighlights,
+                                String.format("Probing neighbor %s (%s): Occupied by %s piece. Skipping.", dirName, neighborCellName, pieceType));
+                        occupiedState.arrows.add(new int[]{r, c, nr, nc, 2}); // Red path arrow
+                        occupiedState.setTileTexts(occupiedTexts);
+                        occupiedState.setMarkers(occupiedMarkers);
+                        
+                        vizHistory.add(occupiedState);
+                        continue;
+                    }
+
+                    // 3. Check if Already Checked/Processed
+                    if (checked[nr][nc]) {
+                        clearArray(curHighlights);
+                        String[][] dupeTexts = new String[8][8];
+                        String[][] dupeMarkers = new String[8][8];
+                        applyOOCandidateHighlights(curHighlights, dupeTexts, dupeMarkers, evaluated, persistentValids, persistentInvalids, -1, -1, false);
+                        
+                        curHighlights[r][c] = 2; // Opponent yellow cursor
+                        curHighlights[nr][nc] = 6; // Purple highlight
+                        dupeTexts[nr][nc] = "Skip";
+                        dupeMarkers[nr][nc] = null;
+                        
+                        VizState dupeState = new VizState(r, c, d, 0, persistentValids, persistentInvalids, curHighlights,
+                                String.format("Probing neighbor %s (%s): Empty, but already processed. Skipping.", dirName, neighborCellName));
+                        dupeState.arrows.add(new int[]{r, c, nr, nc, 2}); // Changed from 6 (purple) to 2 (red) path arrow
+                        dupeState.setTileTexts(dupeTexts);
+                        dupeState.setMarkers(dupeMarkers);
+                        
+                        vizHistory.add(dupeState);
+                        continue;
+                    }
+
+                    // 4. Discovered Unchecked Empty Frontier Candidate
                     checked[nr][nc] = true; 
                     String posName = OthelloBitboard.indexToAlgebraic(nr * 8 + nc);
+
+                    clearArray(curHighlights);
+                    String[][] foundTexts = new String[8][8];
+                    String[][] foundMarkers = new String[8][8];
+                    applyOOCandidateHighlights(curHighlights, foundTexts, foundMarkers, evaluated, persistentValids, persistentInvalids, -1, -1, false);
+                    
+                    curHighlights[r][c] = 2; // Opponent yellow cursor
+                    curHighlights[nr][nc] = 1; // Turquoise candidate highlight
+                    foundTexts[nr][nc] = "Evaluating";
+                    foundMarkers[nr][nc] = "?";
+                    
+                    VizState foundCandidateState = new VizState(r, c, d, 0, persistentValids, persistentInvalids, curHighlights,
+                            String.format("Probing neighbor %s (%s): Empty space found! Initiating directional validations.", dirName, posName));
+                    foundCandidateState.arrows.add(new int[]{r, c, nr, nc, 1}); // Yellow probe arrow
+                    foundCandidateState.setTileTexts(foundTexts);
+                    foundCandidateState.setMarkers(foundMarkers);
+                    
+                    vizHistory.add(foundCandidateState);
 
                     boolean[][] currentSpaceInvalids = new boolean[8][8];
                     boolean[][] currentSpaceFailedOpponents = new boolean[8][8];
                     List<int[]> currentSquareArrows = new ArrayList<>();
                     String[][] currentSquareMarkers = new String[8][8];
                     String[][] currentSquareTexts = new String[8][8];
-
-                    clearArray(curHighlights);
-                    applyOOCandidateHighlights(curHighlights, currentSquareTexts, currentSquareMarkers, evaluated, 
-                                               persistentValids, persistentInvalids, nr, nc, true);
-
-                    VizState neighborState = new VizState(nr, nc, -1, 0, persistentValids, persistentInvalids, curHighlights, "Evaluating candidate " + posName);
-                    neighborState.setTileTexts(currentSquareTexts);
-                    neighborState.setMarkers(currentSquareMarkers);
-                    vizHistory.add(neighborState);
 
                     boolean cellIsIndeedValid = false;
 
@@ -2450,7 +2523,7 @@ public class OthelloGUI extends JFrame {
                             }
                         } else {
                             if (!scannedOpponents.isEmpty()) {
-                                boolean isAlreadyValid = (currR >= 0 && currR < 8 && currC >= 0 && currC < 8) && persistentValids[currR][currC];
+                                boolean isAlreadyValid = (currR >= 0 && currR < 8 && currC >= 0 && currC * 8 >= 0) && persistentValids[currR][currC];
                                 
                                 currentSpaceInvalids[currR][currC] = true;
                                 if (isAlreadyValid) {
@@ -2626,7 +2699,7 @@ public class OthelloGUI extends JFrame {
                     }
                 } else {
                     curHighlights[r][c] = 0; 
-                    if (tileTexts[r][c] != null && (tileTexts[r][c].equals("Own Piece") || tileTexts[r][c].equals("Empty") || tileTexts[r][c].equals("Valid") || tileTexts[r][c].equals("Invalid") || tileTexts[r][c].equals("End of board") || tileTexts[r][c].equals("Edge of board"))) {
+                    if (tileTexts[r][c] != null && (tileTexts[r][c].equals("Own Piece") || tileTexts[r][c].equals("Empty") || tileTexts[r][c].equals("Valid") || tileTexts[r][c].equals("Invalid") || tileTexts[r][c].equals("End of board"))) {
                     } else {
                         tileTexts[r][c] = ""; 
                     }
@@ -3222,108 +3295,165 @@ public class OthelloGUI extends JFrame {
             summary.append("<h2 style='color: #2C3E50; border-bottom: 2px solid #2C3E50; padding-bottom: 5px; margin-bottom: 15px;'>Othello AI Automated Benchmark</h2>");
             System.out.println("=== OTHELLO AI AUTOMATED BENCHMARK ===\n");
 
-            final String[] expectedMoves = new String[12]; 
+            final String[] expectedMoves = new String[16]; 
 
             try {
-                // 1. 2D Cell Objects - Fresh Board (Primitive Sweep)
+                // PHASE 1: FRESH BOARD VISUALIZATIONS
                 runSingleBenchmarkStep(EngineType.NESTED_OBJECT, true, true, true, 7, "2D Cell Objects - Fresh Board Visualizer", "#777777", expectedMoves, summary, false);
                 if (Thread.currentThread().isInterrupted()) return;
                 Thread.sleep(1000);
 
-                // 2. 2D Primitive Values - Fresh Board (Frontier Scan)
                 runSingleBenchmarkStep(EngineType.PRIMITIVE_2D, true, true, true, 7, "2D Primitive Values - Fresh Board Visualizer", "#777777", expectedMoves, summary, false);
                 if (Thread.currentThread().isInterrupted()) return;
                 Thread.sleep(1000);
 
-                // 3. 1D Flat Array - Fresh Board (Segment Scan)
                 runSingleBenchmarkStep(EngineType.FLAT_ARRAY, true, true, true, 7, "1D Flat Array - Fresh Board Visualizer", "#777777", expectedMoves, summary, false);
                 if (Thread.currentThread().isInterrupted()) return;
                 Thread.sleep(1000);
 
-                // 4. Bitboard - Fresh Board
                 runSingleBenchmarkStep(EngineType.BITBOARD, true, true, true, 7, "Bitboard - Fresh Board Visualizer", "#777777", expectedMoves, summary, false);
                 if (Thread.currentThread().isInterrupted()) return;
                 Thread.sleep(1000);
 
-                // 5. 2D Cell Objects - Takizawa (Primitive Sweep)
+                // PHASE 2: TAKIZAWA BOARD VISUALIZATIONS
                 runSingleBenchmarkStep(EngineType.NESTED_OBJECT, true, true, true, 7, "2D Cell Objects - Takizawa Visualizer", "#777777", expectedMoves, summary, true);
                 if (Thread.currentThread().isInterrupted()) return;
                 Thread.sleep(1000);
 
-                // 6. 2D Primitive Values - Takizawa (Frontier Scan)
                 runSingleBenchmarkStep(EngineType.PRIMITIVE_2D, true, true, true, 7, "2D Primitive Values - Takizawa Visualizer", "#777777", expectedMoves, summary, true);
                 if (Thread.currentThread().isInterrupted()) return;
                 Thread.sleep(1000);
 
-                // 7. 1D Flat Array - Takizawa (Segment Scan)
                 runSingleBenchmarkStep(EngineType.FLAT_ARRAY, true, true, true, 7, "1D Flat Array - Takizawa Visualizer", "#777777", expectedMoves, summary, true);
                 if (Thread.currentThread().isInterrupted()) return;
                 Thread.sleep(1000);
 
-                // 8. Bitboard - Takizawa
                 runSingleBenchmarkStep(EngineType.BITBOARD, true, true, true, 7, "Bitboard - Takizawa Visualizer", "#777777", expectedMoves, summary, true);
                 if (Thread.currentThread().isInterrupted()) return;
                 Thread.sleep(1000);
 
-                // TYPE 1: No Alpha-Beta Pruning (Depth 6) - CRIMSON RED
+                // PHASE 3: FRESH BOARD BENCHMARKS (Search)
+                summary.append("<h2 style='color: #2E4053; margin-top: 25px; border-bottom: 2px solid #2E4053; padding-bottom: 5px;'>Fresh Board Search Benchmarks</h2>");
+
+                // Fresh Board Type 1: No Alpha-Beta Pruning (Depth 9)
+                summary.append("<h3 style='color: #D32F2F; margin-top: 15px; border-bottom: 1px solid #D32F2F; padding-bottom: 3px;'>Type 1: No Alpha-Beta Pruning (Depth 9)</h3>");
+                double t6_fresh_nested = runSingleBenchmarkStep(EngineType.NESTED_OBJECT, false, false, false, 9, "2D Cell Objects - Fresh Board - No AB Pruning (Depth 9)", "#D32F2F", expectedMoves, summary, false);
+                if (Thread.currentThread().isInterrupted()) return;
+                Thread.sleep(1000);
+
+                double t6_fresh_primitive = runSingleBenchmarkStep(EngineType.PRIMITIVE_2D, false, false, false, 9, "2D Primitive Values - Fresh Board - No AB Pruning (Depth 9)", "#D32F2F", expectedMoves, summary, false);
+                if (Thread.currentThread().isInterrupted()) return;
+                Thread.sleep(1000);
+
+                double t6_fresh_flat = runSingleBenchmarkStep(EngineType.FLAT_ARRAY, false, false, false, 9, "1D Flat Array - Fresh Board - No AB Pruning (Depth 9)", "#D32F2F", expectedMoves, summary, false);
+                if (Thread.currentThread().isInterrupted()) return;
+                Thread.sleep(1000);
+
+                double t6_fresh_bitboard = runSingleBenchmarkStep(EngineType.BITBOARD, false, false, false, 9, "Bitboard - Fresh Board - No AB Pruning (Depth 9)", "#D32F2F", expectedMoves, summary, false);
+                appendComparison4(summary, t6_fresh_nested, t6_fresh_primitive, t6_fresh_flat, t6_fresh_bitboard);
+                appendSeparator(summary);
+                if (Thread.currentThread().isInterrupted()) return;
+                Thread.sleep(1000);
+
+                // Fresh Board Type 2: Alpha-Beta Pruning, No Move Ordering (Depth 15)
+                summary.append("<h3 style='color: #1976D2; margin-top: 15px; border-bottom: 1px solid #1976D2; padding-bottom: 3px;'>Type 2: Alpha-Beta Pruning, No Move Ordering (Depth 15)</h3>");
+                double t9_fresh_nested = runSingleBenchmarkStep(EngineType.NESTED_OBJECT, false, true, false, 15, "2D Cell Objects - Fresh Board - AB, No Move Ordering (Depth 15)", "#1976D2", expectedMoves, summary, false);
+                if (Thread.currentThread().isInterrupted()) return;
+                Thread.sleep(1000);
+
+                double t9_fresh_primitive = runSingleBenchmarkStep(EngineType.PRIMITIVE_2D, false, true, false, 15, "2D Primitive Values - Fresh Board - AB, No Move Ordering (Depth 15)", "#1976D2", expectedMoves, summary, false);
+                if (Thread.currentThread().isInterrupted()) return;
+                Thread.sleep(1000);
+
+                double t9_fresh_flat = runSingleBenchmarkStep(EngineType.FLAT_ARRAY, false, true, false, 15, "1D Flat Array - Fresh Board - AB, No Move Ordering (Depth 15)", "#1976D2", expectedMoves, summary, false);
+                if (Thread.currentThread().isInterrupted()) return;
+                Thread.sleep(1000);
+
+                double t9_fresh_bitboard = runSingleBenchmarkStep(EngineType.BITBOARD, false, true, false, 15, "Bitboard - Fresh Board - AB, No Move Ordering (Depth 15)", "#1976D2", expectedMoves, summary, false);
+                appendComparison4(summary, t9_fresh_nested, t9_fresh_primitive, t9_fresh_flat, t9_fresh_bitboard);
+                appendSeparator(summary);
+                if (Thread.currentThread().isInterrupted()) return;
+                Thread.sleep(1000);
+
+                // Fresh Board Type 3: Alpha-Beta Pruning with Move Ordering (Depth 15)
+                summary.append("<h3 style='color: #388E3C; margin-top: 15px; border-bottom: 1px solid #388E3C; padding-bottom: 3px;'>Type 3: Alpha-Beta Pruning with Move Ordering (Depth 15)</h3>");
+                double t10_fresh_nested = runSingleBenchmarkStep(EngineType.NESTED_OBJECT, false, true, true, 15, "2D Cell Objects - Fresh Board - AB with Move Ordering (Depth 15)", "#388E3C", expectedMoves, summary, false);
+                if (Thread.currentThread().isInterrupted()) return;
+                Thread.sleep(1000);
+
+                double t10_fresh_primitive = runSingleBenchmarkStep(EngineType.PRIMITIVE_2D, false, true, true, 15, "2D Primitive Values - Fresh Board - AB with Move Ordering (Depth 15)", "#388E3C", expectedMoves, summary, false);
+                if (Thread.currentThread().isInterrupted()) return;
+                Thread.sleep(1000);
+
+                double t10_fresh_flat = runSingleBenchmarkStep(EngineType.FLAT_ARRAY, false, true, true, 15, "1D Flat Array - Fresh Board - AB with Move Ordering (Depth 15)", "#388E3C", expectedMoves, summary, false);
+                if (Thread.currentThread().isInterrupted()) return;
+                Thread.sleep(1000);
+
+                double t10_fresh_bitboard = runSingleBenchmarkStep(EngineType.BITBOARD, false, true, true, 15, "Bitboard - Fresh Board - AB with Move Ordering (Depth 15)", "#388E3C", expectedMoves, summary, false);
+                appendComparison4(summary, t10_fresh_nested, t10_fresh_primitive, t10_fresh_flat, t10_fresh_bitboard);
+                appendSeparator(summary);
+                if (Thread.currentThread().isInterrupted()) return;
+                Thread.sleep(1000);
+
+                // PHASE 4: TAKIZAWA BOARD BENCHMARKS (Search)
+                summary.append("<h2 style='color: #2E4053; margin-top: 25px; border-bottom: 2px solid #2E4053; padding-bottom: 5px;'>Takizawa Board Search Benchmarks</h2>");
+
+                // Takizawa Type 1: No Alpha-Beta Pruning (Depth 6)
                 summary.append("<h3 style='color: #D32F2F; margin-top: 15px; border-bottom: 1px solid #D32F2F; padding-bottom: 3px;'>Type 1: No Alpha-Beta Pruning (Depth 6)</h3>");
-                double t6_nested = runSingleBenchmarkStep(EngineType.NESTED_OBJECT, false, false, false, 6, "2D Cell Objects - No AB Pruning (Depth 6)", "#D32F2F", expectedMoves, summary, true);
+                double t6_tak_nested = runSingleBenchmarkStep(EngineType.NESTED_OBJECT, false, false, false, 6, "2D Cell Objects - Takizawa - No AB Pruning (Depth 6)", "#D32F2F", expectedMoves, summary, true);
                 if (Thread.currentThread().isInterrupted()) return;
                 Thread.sleep(1000);
 
-                double t6_primitive = runSingleBenchmarkStep(EngineType.PRIMITIVE_2D, false, false, false, 6, "2D Primitive Values - No AB Pruning (Depth 6)", "#D32F2F", expectedMoves, summary, true);
+                double t6_tak_primitive = runSingleBenchmarkStep(EngineType.PRIMITIVE_2D, false, false, false, 6, "2D Primitive Values - Takizawa - No AB Pruning (Depth 6)", "#D32F2F", expectedMoves, summary, true);
                 if (Thread.currentThread().isInterrupted()) return;
                 Thread.sleep(1000);
 
-                double t6_flat = runSingleBenchmarkStep(EngineType.FLAT_ARRAY, false, false, false, 6, "1D Flat Array - No AB Pruning (Depth 6)", "#D32F2F", expectedMoves, summary, true);
+                double t6_tak_flat = runSingleBenchmarkStep(EngineType.FLAT_ARRAY, false, false, false, 6, "1D Flat Array - Takizawa - No AB Pruning (Depth 6)", "#D32F2F", expectedMoves, summary, true);
                 if (Thread.currentThread().isInterrupted()) return;
                 Thread.sleep(1000);
 
-                double t6_bitboard = runSingleBenchmarkStep(EngineType.BITBOARD, false, false, false, 6, "Bitboard - No AB Pruning (Depth 6)", "#D32F2F", expectedMoves, summary, true);
-                
-                appendComparison4(summary, t6_nested, t6_primitive, t6_flat, t6_bitboard);
+                double t6_tak_bitboard = runSingleBenchmarkStep(EngineType.BITBOARD, false, false, false, 6, "Bitboard - Takizawa - No AB Pruning (Depth 6)", "#D32F2F", expectedMoves, summary, true);
+                appendComparison4(summary, t6_tak_nested, t6_tak_primitive, t6_tak_flat, t6_tak_bitboard);
                 appendSeparator(summary);
                 if (Thread.currentThread().isInterrupted()) return;
                 Thread.sleep(1000);
 
-                // TYPE 2: Alpha-Beta Pruning, No Move Ordering (Depth 9) - DEEP BLUE
+                // Takizawa Type 2: Alpha-Beta Pruning, No Move Ordering (Depth 9)
                 summary.append("<h3 style='color: #1976D2; margin-top: 15px; border-bottom: 1px solid #1976D2; padding-bottom: 3px;'>Type 2: Alpha-Beta Pruning, No Move Ordering (Depth 9)</h3>");
-                double t9_nested = runSingleBenchmarkStep(EngineType.NESTED_OBJECT, false, true, false, 9, "2D Cell Objects - AB, No Move Ordering (Depth 9)", "#1976D2", expectedMoves, summary, true);
+                double t9_tak_nested = runSingleBenchmarkStep(EngineType.NESTED_OBJECT, false, true, false, 9, "2D Cell Objects - Takizawa - AB, No Move Ordering (Depth 9)", "#1976D2", expectedMoves, summary, true);
                 if (Thread.currentThread().isInterrupted()) return;
                 Thread.sleep(1000);
 
-                double t9_primitive = runSingleBenchmarkStep(EngineType.PRIMITIVE_2D, false, true, false, 9, "2D Primitive Values - AB, No Move Ordering (Depth 9)", "#1976D2", expectedMoves, summary, true);
+                double t9_tak_primitive = runSingleBenchmarkStep(EngineType.PRIMITIVE_2D, false, true, false, 9, "2D Primitive Values - Takizawa - AB, No Move Ordering (Depth 9)", "#1976D2", expectedMoves, summary, true);
                 if (Thread.currentThread().isInterrupted()) return;
                 Thread.sleep(1000);
 
-                double t9_flat = runSingleBenchmarkStep(EngineType.FLAT_ARRAY, false, true, false, 9, "1D Flat Array - AB, No Move Ordering (Depth 9)", "#1976D2", expectedMoves, summary, true);
+                double t9_tak_flat = runSingleBenchmarkStep(EngineType.FLAT_ARRAY, false, true, false, 9, "1D Flat Array - Takizawa - AB, No Move Ordering (Depth 9)", "#1976D2", expectedMoves, summary, true);
                 if (Thread.currentThread().isInterrupted()) return;
                 Thread.sleep(1000);
 
-                double t9_bitboard = runSingleBenchmarkStep(EngineType.BITBOARD, false, true, false, 9, "Bitboard - AB, No Move Ordering (Depth 9)", "#1976D2", expectedMoves, summary, true);
-                
-                appendComparison4(summary, t9_nested, t9_primitive, t9_flat, t9_bitboard);
+                double t9_tak_bitboard = runSingleBenchmarkStep(EngineType.BITBOARD, false, true, false, 9, "Bitboard - Takizawa - AB, No Move Ordering (Depth 9)", "#1976D2", expectedMoves, summary, true);
+                appendComparison4(summary, t9_tak_nested, t9_tak_primitive, t9_tak_flat, t9_tak_bitboard);
                 appendSeparator(summary);
                 if (Thread.currentThread().isInterrupted()) return;
                 Thread.sleep(1000);
 
-                // TYPE 3: Alpha-Beta Pruning with Move Ordering (Depth 10) - DEEP GREEN
+                // Takizawa Type 3: Alpha-Beta Pruning with Move Ordering (Depth 10)
                 summary.append("<h3 style='color: #388E3C; margin-top: 15px; border-bottom: 1px solid #388E3C; padding-bottom: 3px;'>Type 3: Alpha-Beta Pruning with Move Ordering (Depth 10)</h3>");
-                double t10_nested = runSingleBenchmarkStep(EngineType.NESTED_OBJECT, false, true, true, 10, "2D Cell Objects - AB with Move Ordering (Depth 10)", "#388E3C", expectedMoves, summary, true);
+                double t10_tak_nested = runSingleBenchmarkStep(EngineType.NESTED_OBJECT, false, true, true, 10, "2D Cell Objects - Takizawa - AB with Move Ordering (Depth 10)", "#388E3C", expectedMoves, summary, true);
                 if (Thread.currentThread().isInterrupted()) return;
                 Thread.sleep(1000);
 
-                double t10_primitive = runSingleBenchmarkStep(EngineType.PRIMITIVE_2D, false, true, true, 10, "2D Primitive Values - AB with Move Ordering (Depth 10)", "#388E3C", expectedMoves, summary, true);
+                double t10_tak_primitive = runSingleBenchmarkStep(EngineType.PRIMITIVE_2D, false, true, true, 10, "2D Primitive Values - Takizawa - AB with Move Ordering (Depth 10)", "#388E3C", expectedMoves, summary, true);
                 if (Thread.currentThread().isInterrupted()) return;
                 Thread.sleep(1000);
 
-                double t10_flat = runSingleBenchmarkStep(EngineType.FLAT_ARRAY, false, true, true, 10, "1D Flat Array - AB with Move Ordering (Depth 10)", "#388E3C", expectedMoves, summary, true);
+                double t10_tak_flat = runSingleBenchmarkStep(EngineType.FLAT_ARRAY, false, true, true, 10, "1D Flat Array - Takizawa - AB with Move Ordering (Depth 10)", "#388E3C", expectedMoves, summary, true);
                 if (Thread.currentThread().isInterrupted()) return;
                 Thread.sleep(1000);
 
-                double t10_bitboard = runSingleBenchmarkStep(EngineType.BITBOARD, false, true, true, 10, "Bitboard - AB with Move Ordering (Depth 10)", "#388E3C", expectedMoves, summary, true);
-                
-                appendComparison4(summary, t10_nested, t10_primitive, t10_flat, t10_bitboard);
+                double t10_tak_bitboard = runSingleBenchmarkStep(EngineType.BITBOARD, false, true, true, 10, "Bitboard - Takizawa - AB with Move Ordering (Depth 10)", "#388E3C", expectedMoves, summary, true);
+                appendComparison4(summary, t10_tak_nested, t10_tak_primitive, t10_tak_flat, t10_tak_bitboard);
 
                 summary.append("</body></html>");
 
@@ -3681,7 +3811,20 @@ public class OthelloGUI extends JFrame {
                 currentPlayer = WHITE; 
             }
         } else {
-            currentPlayer = BLACK; 
+            if (isVisualizer) {
+                currentPlayer = BLACK;
+            } else {
+                int activePlayer = BLACK;
+                int d3Index = OthelloBitboard.algebraicToIndex("D3");
+                if (d3Index != -1) {
+                    int r = d3Index / 8;
+                    int c = d3Index % 8;
+                    if (game.isValidMove(r, c, activePlayer)) {
+                        game.makeMove(r, c, activePlayer);
+                    }
+                }
+                currentPlayer = WHITE;
+            }
         }
     }
 

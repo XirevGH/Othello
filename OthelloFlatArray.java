@@ -17,9 +17,12 @@ public class OthelloFlatArray implements OthelloBoard {
             4, -3, 2, 2, 2, 2, -3, 4
     };
 
+    private static final int[] DR = {0, 1, 1, 1, 0, -1, -1, -1};
+    private static final int[] DC = {1, 1, 0, -1, -1, -1, 0, 1};
+
     private final int[] board = new int[64];
     private boolean useAlphaBeta = true;
-    private boolean useMoveOrdering = true; 
+    private boolean useMoveOrdering = true;
 
     private static class NodeCounter {
         long count = 0;
@@ -28,24 +31,25 @@ public class OthelloFlatArray implements OthelloBoard {
     private final NodeCounter nodeCounter;
 
     private final UndoState[] undoStack = new UndoState[64];
-    private final int[][] moveStack = new int[64][64]; 
+
+    private final int[] moveStackR = new int[64 * 64];
+    private final int[] moveStackC = new int[64 * 64];
     private final int[] moveCountStack = new int[64];
-    
-    // Stack-allocated arrays to track processed axes and duplicate moves (Optimized without bitwise math)
+
     private final boolean[][][] processedStack = new boolean[64][64][4];
     private final boolean[][] addedStack = new boolean[64][64];
 
     public OthelloFlatArray() {
         this.nodeCounter = new NodeCounter();
-        
+
         for (int i = 0; i < 64; i++) {
             undoStack[i] = new UndoState();
         }
-        
-        board[3 * 8 + 4] = BLACK; 
-        board[4 * 8 + 3] = BLACK; 
-        board[3 * 8 + 3] = WHITE; 
-        board[4 * 8 + 4] = WHITE; 
+
+        board[3 * 8 + 4] = BLACK;
+        board[4 * 8 + 3] = BLACK;
+        board[3 * 8 + 3] = WHITE;
+        board[4 * 8 + 4] = WHITE;
     }
 
     private OthelloFlatArray(NodeCounter counter) {
@@ -59,7 +63,7 @@ public class OthelloFlatArray implements OthelloBoard {
     public void setUseMoveOrdering(boolean useMoveOrdering) {
         this.useMoveOrdering = useMoveOrdering;
     }
-    
+
     @Override
     public long getEvaluationCount() {
         return nodeCounter.evaluations;
@@ -96,41 +100,25 @@ public class OthelloFlatArray implements OthelloBoard {
 
     @Override
     public boolean isValidMove(int r, int c, int player) {
-        // Fallback for isolated legal checks
         int index = r * 8 + c;
         if (board[index] != EMPTY) return false;
-        
-        int opponent = (player == BLACK) ? WHITE : BLACK;
-        int[] drAxes = {0, 1, 1, 1};
-        int[] dcAxes = {1, 0, 1, -1};
-        
-        for (int axis = 0; axis < 4; axis++) {
-            int dr = drAxes[axis];
-            int dc = dcAxes[axis];
-            
-            // Check + Direction
-            int stepPlus = 0;
-            int currR = r + dr;
-            int currC = c + dc;
-            while (currR >= 0 && currR < 8 && currC >= 0 && currC < 8 && board[currR * 8 + currC] == opponent) {
-                stepPlus++;
-                currR += dr;
-                currC += dc;
-            }
-            boolean foundPlayerPlus = (currR >= 0 && currR < 8 && currC >= 0 && currC < 8 && board[currR * 8 + currC] == player);
-            if (stepPlus > 0 && foundPlayerPlus) return true;
 
-            // Check - Direction
-            int stepMinus = 0;
-            currR = r - dr;
-            currC = c - dc;
+        int opponent = (player == BLACK) ? WHITE : BLACK;
+
+        for (int d = 0; d < 8; d++) {
+            int currR = r + DR[d];
+            int currC = c + DC[d];
+            int count = 0;
+
             while (currR >= 0 && currR < 8 && currC >= 0 && currC < 8 && board[currR * 8 + currC] == opponent) {
-                stepMinus++;
-                currR -= dr;
-                currC -= dc;
+                count++;
+                currR += DR[d];
+                currC += DC[d];
             }
-            boolean foundPlayerMinus = (currR >= 0 && currR < 8 && currC >= 0 && currC < 8 && board[currR * 8 + currC] == player);
-            if (stepMinus > 0 && foundPlayerMinus) return true;
+
+            if (count > 0 && currR >= 0 && currR < 8 && currC >= 0 && currC < 8 && board[currR * 8 + currC] == player) {
+                return true;
+            }
         }
         return false;
     }
@@ -139,65 +127,22 @@ public class OthelloFlatArray implements OthelloBoard {
     public List<int[]> getValidMoves(int player) {
         List<int[]> moves = new ArrayList<>();
         int opponent = (player == BLACK) ? WHITE : BLACK;
-        
-        boolean[][] processed = new boolean[64][4];
-        boolean[] added = new boolean[64];
-
-        int[] drAxes = {0, 1, 1, 1};
-        int[] dcAxes = {1, 0, 1, -1};
+        long visited = 0L;
 
         for (int i = 0; i < 64; i++) {
             if (board[i] == opponent) {
                 int r = i / 8;
                 int c = i % 8;
-
-                for (int axis = 0; axis < 4; axis++) {
-                    if (processed[i][axis]) continue;
-
-                    int dr = drAxes[axis];
-                    int dc = dcAxes[axis];
-
-                    // Scan + Direction
-                    int currR = r + dr;
-                    int currC = c + dc;
-                    while (currR >= 0 && currR < 8 && currC >= 0 && currC < 8 && board[currR * 8 + currC] == opponent) {
-                        processed[currR * 8 + currC][axis] = true;
-                        currR += dr;
-                        currC += dc;
-                    }
-                    int termPlusR = currR;
-                    int termPlusC = currC;
-
-                    // Scan - Direction
-                    currR = r - dr;
-                    currC = c - dc;
-                    while (currR >= 0 && currR < 8 && currC >= 0 && currC < 8 && board[currR * 8 + currC] == opponent) {
-                        processed[currR * 8 + currC][axis] = true;
-                        currR -= dr;
-                        currC -= dc;
-                    }
-                    int termMinusR = currR;
-                    int termMinusC = currC;
-
-                    processed[i][axis] = true;
-
-                    boolean termPlusOnBoard = (termPlusR >= 0 && termPlusR < 8 && termPlusC >= 0 && termPlusC < 8);
-                    boolean termMinusOnBoard = (termMinusR >= 0 && termMinusR < 8 && termMinusC >= 0 && termMinusC < 8);
-
-                    if (termPlusOnBoard && termMinusOnBoard) {
-                        int plusIdx = termPlusR * 8 + termPlusC;
-                        int minusIdx = termMinusR * 8 + termMinusC;
-
-                        if (board[plusIdx] == EMPTY && board[minusIdx] == player) {
-                            if (!added[plusIdx]) {
-                                added[plusIdx] = true;
-                                moves.add(new int[]{termPlusR, termPlusC});
-                            }
-                        }
-                        if (board[minusIdx] == EMPTY && board[plusIdx] == player) {
-                            if (!added[minusIdx]) {
-                                added[minusIdx] = true;
-                                moves.add(new int[]{termMinusR, termMinusC});
+                for (int d = 0; d < 8; d++) {
+                    int nr = r + DR[d];
+                    int nc = c + DC[d];
+                    if (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) {
+                        int ni = nr * 8 + nc;
+                        long bit = 1L << ni;
+                        if (board[ni] == EMPTY && (visited & bit) == 0) {
+                            visited |= bit;
+                            if (isValidMove(nr, nc, player)) {
+                                moves.add(new int[]{nr, nc});
                             }
                         }
                     }
@@ -210,70 +155,25 @@ public class OthelloFlatArray implements OthelloBoard {
     private void generateMoves1D(int player, int ply) {
         int count = 0;
         int opponent = (player == BLACK) ? WHITE : BLACK;
-
-        for (int i = 0; i < 64; i++) {
-            processedStack[ply][i][0] = false;
-            processedStack[ply][i][1] = false;
-            processedStack[ply][i][2] = false;
-            processedStack[ply][i][3] = false;
-            addedStack[ply][i] = false;
-        }
-
-        int[] drAxes = {0, 1, 1, 1};
-        int[] dcAxes = {1, 0, 1, -1};
+        long visited = 0L;
+        int base = ply * 64;
 
         for (int i = 0; i < 64; i++) {
             if (board[i] == opponent) {
                 int r = i / 8;
                 int c = i % 8;
-
-                for (int axis = 0; axis < 4; axis++) {
-                    if (processedStack[ply][i][axis]) continue;
-
-                    int dr = drAxes[axis];
-                    int dc = dcAxes[axis];
-
-                    // Scan + Direction
-                    int currR = r + dr;
-                    int currC = c + dc;
-                    while (currR >= 0 && currR < 8 && currC >= 0 && currC < 8 && board[currR * 8 + currC] == opponent) {
-                        processedStack[ply][currR * 8 + currC][axis] = true;
-                        currR += dr;
-                        currC += dc;
-                    }
-                    int termPlusR = currR;
-                    int termPlusC = currC;
-
-                    // Scan - Direction
-                    currR = r - dr;
-                    currC = c - dc;
-                    while (currR >= 0 && currR < 8 && currC >= 0 && currC < 8 && board[currR * 8 + currC] == opponent) {
-                        processedStack[ply][currR * 8 + currC][axis] = true;
-                        currR -= dr;
-                        currC -= dc;
-                    }
-                    int termMinusR = currR;
-                    int termMinusC = currC;
-
-                    processedStack[ply][i][axis] = true;
-
-                    boolean termPlusOnBoard = (termPlusR >= 0 && termPlusR < 8 && termPlusC >= 0 && termPlusC < 8);
-                    boolean termMinusOnBoard = (termMinusR >= 0 && termMinusR < 8 && termMinusC >= 0 && termMinusC < 8);
-
-                    if (termPlusOnBoard && termMinusOnBoard) {
-                        int plusIdx = termPlusR * 8 + termPlusC;
-                        int minusIdx = termMinusR * 8 + termMinusC;
-
-                        if (board[plusIdx] == EMPTY && board[minusIdx] == player) {
-                            if (!addedStack[ply][plusIdx]) {
-                                addedStack[ply][plusIdx] = true;
-                                moveStack[ply][count++] = plusIdx;
-                            }
-                        }
-                        if (board[minusIdx] == EMPTY && board[plusIdx] == player) {
-                            if (!addedStack[ply][minusIdx]) {
-                                addedStack[ply][minusIdx] = true;
-                                moveStack[ply][count++] = minusIdx;
+                for (int d = 0; d < 8; d++) {
+                    int nr = r + DR[d];
+                    int nc = c + DC[d];
+                    if (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) {
+                        int ni = nr * 8 + nc;
+                        long bit = 1L << ni;
+                        if (board[ni] == EMPTY && (visited & bit) == 0) {
+                            visited |= bit;
+                            if (isValidMove(nr, nc, player)) {
+                                moveStackR[base + count] = nr;
+                                moveStackC[base + count] = nc;
+                                count++;
                             }
                         }
                     }
@@ -283,16 +183,20 @@ public class OthelloFlatArray implements OthelloBoard {
 
         if (useAlphaBeta && useMoveOrdering && count > 1) {
             for (int i = 1; i < count; i++) {
-                int move = moveStack[ply][i];
-                int weight = STATIC_WEIGHTS[move];
+                int mr = moveStackR[base + i];
+                int mc = moveStackC[base + i];
+                int weight = STATIC_WEIGHTS[mr * 8 + mc];
                 int j = i - 1;
-                while (j >= 0 && STATIC_WEIGHTS[moveStack[ply][j]] < weight) {
-                    moveStack[ply][j + 1] = moveStack[ply][j];
+                while (j >= 0 && STATIC_WEIGHTS[moveStackR[base + j] * 8 + moveStackC[base + j]] < weight) {
+                    moveStackR[base + j + 1] = moveStackR[base + j];
+                    moveStackC[base + j + 1] = moveStackC[base + j];
                     j--;
                 }
-                moveStack[ply][j + 1] = move;
+                moveStackR[base + j + 1] = mr;
+                moveStackC[base + j + 1] = mc;
             }
         }
+
         moveCountStack[ply] = count;
     }
 
@@ -310,12 +214,9 @@ public class OthelloFlatArray implements OthelloBoard {
 
         if (board[index] != EMPTY) return false;
 
-        int[] drAxes = {0, 1, 1, 1, 0, -1, -1, -1};
-        int[] dcAxes = {1, 1, 0, -1, -1, -1, 0, 1};
-
         for (int d = 0; d < 8; d++) {
-            int dr = drAxes[d];
-            int dc = dcAxes[d];
+            int dr = DR[d];
+            int dc = DC[d];
 
             int currRow = r + dr;
             int currCol = c + dc;
@@ -356,7 +257,28 @@ public class OthelloFlatArray implements OthelloBoard {
     }
 
     private boolean hasValidMoves(int player) {
-        return !getValidMoves(player).isEmpty();
+        int opponent = (player == BLACK) ? WHITE : BLACK;
+        long visited = 0L;
+
+        for (int i = 0; i < 64; i++) {
+            if (board[i] == opponent) {
+                int r = i / 8;
+                int c = i % 8;
+                for (int d = 0; d < 8; d++) {
+                    int nr = r + DR[d];
+                    int nc = c + DC[d];
+                    if (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) {
+                        int ni = nr * 8 + nc;
+                        long bit = 1L << ni;
+                        if (board[ni] == EMPTY && (visited & bit) == 0) {
+                            visited |= bit;
+                            if (isValidMove(nr, nc, player)) return true;
+                        }
+                    }
+                }
+            }
+        }
+        return false;
     }
 
     @Override
@@ -385,19 +307,19 @@ public class OthelloFlatArray implements OthelloBoard {
     private int evaluate(int originalPlayer) {
         nodeCounter.evaluations++;
         int opponent = (originalPlayer == BLACK) ? WHITE : BLACK;
-        
+
         generateMoves1D(originalPlayer, 63);
         int validMovesMax = moveCountStack[63];
-        
+
         generateMoves1D(opponent, 63);
         int validMovesMin = moveCountStack[63];
 
         int mobilityScore = validMovesMax - validMovesMin;
-        int discDifference = countDiscs(originalPlayer) - countDiscs(opponent);
 
         int positionScore = 0;
         int edgeScore = 0;
         int cornerScore = 0;
+        int discDifference = 0;
 
         for (int index = 0; index < 64; index++) {
             int piece = board[index];
@@ -405,6 +327,7 @@ public class OthelloFlatArray implements OthelloBoard {
 
             int scoreFactor = (piece == originalPlayer) ? 1 : -1;
 
+            discDifference += scoreFactor;
             positionScore += STATIC_WEIGHTS[index] * scoreFactor;
 
             int r = index / 8;
@@ -437,17 +360,18 @@ public class OthelloFlatArray implements OthelloBoard {
 
         if (moveCount == 0) {
             int currentOpponent = (player == BLACK) ? WHITE : BLACK;
-            
+
             generateMoves1D(currentOpponent, ply);
             int opponentCount = moveCountStack[ply];
-            
+
             if (opponentCount == 0) {
                 return evaluate(originalPlayer);
             }
-            
+
             return minimax(depth, alpha, beta, !isMaximizing, currentOpponent, originalPlayer, ply + 1);
         }
 
+        int base = ply * 64;
         int currentOpponent = (player == BLACK) ? WHITE : BLACK;
         if (isMaximizing) {
             int maxEval = Integer.MIN_VALUE;
@@ -456,22 +380,17 @@ public class OthelloFlatArray implements OthelloBoard {
                     return 0;
                 }
 
-                int moveIndex = moveStack[ply][i];
-                int r = moveIndex / 8;
-                int c = moveIndex % 8;
-
                 UndoState undo = undoStack[ply];
-                makeMoveRecord(r, c, player, undo);
+                makeMoveRecord(moveStackR[base + i], moveStackC[base + i], player, undo);
 
-                int eval = minimax(depth - 1, 
-                                   useAlphaBeta ? alpha : Integer.MIN_VALUE, 
-                                   useAlphaBeta ? beta : Integer.MAX_VALUE, 
+                int eval = minimax(depth - 1,
+                                   useAlphaBeta ? alpha : Integer.MIN_VALUE,
+                                   useAlphaBeta ? beta : Integer.MAX_VALUE,
                                    false, currentOpponent, originalPlayer, ply + 1);
-                
-                undoMove(undo, player); 
+
+                undoMove(undo, player);
 
                 maxEval = Integer.max(maxEval, eval);
-                
                 if (useAlphaBeta) {
                     alpha = Integer.max(alpha, eval);
                     if (beta <= alpha) {
@@ -487,22 +406,17 @@ public class OthelloFlatArray implements OthelloBoard {
                     return 0;
                 }
 
-                int moveIndex = moveStack[ply][i];
-                int r = moveIndex / 8;
-                int c = moveIndex % 8;
-
                 UndoState undo = undoStack[ply];
-                makeMoveRecord(r, c, player, undo);
+                makeMoveRecord(moveStackR[base + i], moveStackC[base + i], player, undo);
 
-                int eval = minimax(depth - 1, 
-                                   useAlphaBeta ? alpha : Integer.MIN_VALUE, 
-                                   useAlphaBeta ? beta : Integer.MAX_VALUE, 
+                int eval = minimax(depth - 1,
+                                   useAlphaBeta ? alpha : Integer.MIN_VALUE,
+                                   useAlphaBeta ? beta : Integer.MAX_VALUE,
                                    true, currentOpponent, originalPlayer, ply + 1);
-                
-                undoMove(undo, player); 
+
+                undoMove(undo, player);
 
                 minEval = Integer.min(minEval, eval);
-                
                 if (useAlphaBeta) {
                     beta = Integer.min(beta, eval);
                     if (beta <= alpha) {
@@ -516,15 +430,15 @@ public class OthelloFlatArray implements OthelloBoard {
 
     @Override
     public int findBestMove(int player, int depth) {
-        nodeCounter.count = 0; 
+        nodeCounter.count = 0;
         nodeCounter.evaluations = 0;
-        
+
         OthelloFlatArray searchBoard = copy();
         return searchBoard.findBestMoveInternal(player, depth);
     }
 
     private int findBestMoveInternal(int player, int depth) {
-        generateMoves1D(player, 0); 
+        generateMoves1D(player, 0);
         int moveCount = moveCountStack[0];
         if (moveCount == 0) {
             return -1;
@@ -537,33 +451,34 @@ public class OthelloFlatArray implements OthelloBoard {
         int alpha = Integer.MIN_VALUE;
         int beta = Integer.MAX_VALUE;
 
-        int[] rootMoves = new int[moveCount];
-        System.arraycopy(moveStack[0], 0, rootMoves, 0, moveCount);
+        int[] rootMovesR = new int[moveCount];
+        int[] rootMovesC = new int[moveCount];
+        System.arraycopy(moveStackR, 0, rootMovesR, 0, moveCount);
+        System.arraycopy(moveStackC, 0, rootMovesC, 0, moveCount);
 
         for (int i = 0; i < moveCount; i++) {
             if (Thread.currentThread().isInterrupted()) {
                 return -1;
             }
 
-            int moveIndex = rootMoves[i];
-            int r = moveIndex / 8;
-            int c = moveIndex % 8;
+            int mr = rootMovesR[i];
+            int mc = rootMovesC[i];
 
             UndoState undo = undoStack[0];
-            makeMoveRecord(r, c, player, undo);
+            makeMoveRecord(mr, mc, player, undo);
 
-            int eval = minimax(depth - 1, 
-                               useAlphaBeta ? alpha : Integer.MIN_VALUE, 
-                               useAlphaBeta ? beta : Integer.MAX_VALUE, 
+            int eval = minimax(depth - 1,
+                               useAlphaBeta ? alpha : Integer.MIN_VALUE,
+                               useAlphaBeta ? beta : Integer.MAX_VALUE,
                                false, currentOpponent, player, 1);
 
             undoMove(undo, player);
 
             if (eval > bestScore) {
                 bestScore = eval;
-                bestMove = moveIndex;
+                bestMove = mr * 8 + mc;
             }
-            
+
             if (useAlphaBeta) {
                 alpha = Math.max(alpha, bestScore);
             }
@@ -587,8 +502,8 @@ public class OthelloFlatArray implements OthelloBoard {
             totalChildMoves += child.getValidMoves(opponent).size();
         }
 
-        double priorWeight = 4.0; 
-        double priorB = 8.0; 
+        double priorWeight = 4.0;
+        double priorB = 8.0;
         double b1 = (totalChildMoves + (priorWeight * priorB)) / (n0 + priorWeight);
 
         double total;
