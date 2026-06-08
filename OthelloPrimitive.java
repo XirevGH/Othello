@@ -36,6 +36,8 @@ public class OthelloPrimitive implements OthelloBoard {
     private final int[] moveStackC = new int[64 * 64];
     private final int[] moveCountStack = new int[64];
 
+    private final boolean[][] visitedStack = new boolean[64][64];
+
     public OthelloPrimitive() {
         this.nodeCounter = new NodeCounter();
 
@@ -99,7 +101,10 @@ public class OthelloPrimitive implements OthelloBoard {
 
     @Override
     public boolean isValidMove(int r, int c, int player) {
-        if (board[r][c] != EMPTY) return false;
+        if (r < 0 || r >= 8 || c < 0 || c >= 8 || board[r][c] != EMPTY) {
+            return false;
+        }
+        
         int opponent = (player == BLACK) ? WHITE : BLACK;
 
         for (int d = 0; d < 8; d++) {
@@ -127,7 +132,7 @@ public class OthelloPrimitive implements OthelloBoard {
     public List<int[]> getValidMoves(int player) {
         List<int[]> moves = new ArrayList<>();
         int opponent = (player == BLACK) ? WHITE : BLACK;
-        long visited = 0L;
+        boolean[] visited = new boolean[64]; // Avoid bit-shifting sign extension bugs
 
         for (int r = 0; r < 8; r++) {
             for (int c = 0; c < 8; c++) {
@@ -137,9 +142,9 @@ public class OthelloPrimitive implements OthelloBoard {
                         int nc = c + DC[d];
 
                         if (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) {
-                            long bit = 1L << (nr * 8 + nc);
-                            if (board[nr][nc] == EMPTY && (visited & bit) == 0) {
-                                visited |= bit;
+                            int idx = nr * 8 + nc;
+                            if (board[nr][nc] == EMPTY && !visited[idx]) {
+                                visited[idx] = true;
                                 if (isValidMove(nr, nc, player)) {
                                     moves.add(new int[]{nr, nc});
                                 }
@@ -155,8 +160,12 @@ public class OthelloPrimitive implements OthelloBoard {
     private void generateMoves2D(int player, int ply) {
         int count = 0;
         int opponent = (player == BLACK) ? WHITE : BLACK;
-        long visited = 0L;
         int base = ply * 64; 
+
+        // Reset the visited array for the current ply
+        for (int i = 0; i < 64; i++) {
+            visitedStack[ply][i] = false;
+        }
 
         for (int r = 0; r < 8; r++) {
             for (int c = 0; c < 8; c++) {
@@ -166,9 +175,9 @@ public class OthelloPrimitive implements OthelloBoard {
                         int nc = c + DC[d];
 
                         if (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) {
-                            long bit = 1L << (nr * 8 + nc);
-                            if (board[nr][nc] == EMPTY && (visited & bit) == 0) {
-                                visited |= bit;
+                            int idx = nr * 8 + nc;
+                            if (board[nr][nc] == EMPTY && !visitedStack[ply][idx]) {
+                                visitedStack[ply][idx] = true; // Mark as visited
                                 if (isValidMove(nr, nc, player)) {
                                     moveStackR[base + count] = nr;
                                     moveStackC[base + count] = nc;

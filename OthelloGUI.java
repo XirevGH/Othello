@@ -1043,7 +1043,6 @@ public class OthelloGUI extends JFrame {
 
         aiProgressTimer = new Timer(50, e -> {
             long checked = game.getEvaluatedNodes();
-            long evals = game.getEvaluationCount();
             long elapsedNanos = System.nanoTime() - aiStartTime;
             double elapsedSeconds = elapsedNanos / 1_000_000_000.0;
             
@@ -1052,7 +1051,11 @@ public class OthelloGUI extends JFrame {
                 nps = Math.round(checked / elapsedSeconds);
             }
             
-            aiInfoLabel.setText(String.format("Evaluating... %,d states, %,d evals (%,d/sec)", checked, evals, nps));
+            boolean ab = alphaBetaCheckbox.isSelected();
+            boolean mo = moveOrderingCheckbox.isSelected();
+            String settingsStr = String.format("[Alpha-Beta: %s, Move Ordering: %s]", ab ? "ON" : "OFF", mo ? "ON" : "OFF");
+
+            aiInfoLabel.setText(String.format("Evaluated %,d states in %.2fs (%,d/sec) %s ", checked, elapsedSeconds, nps, settingsStr));
         });
         aiProgressTimer.start();
 
@@ -1094,7 +1097,6 @@ public class OthelloGUI extends JFrame {
                 try {
                     int bestMoveIndex = get();
                     long checked = game.getEvaluatedNodes();
-                    long evals = game.getEvaluationCount();
                     long elapsedNanos = System.nanoTime() - aiStartTime;
                     double elapsedSeconds = elapsedNanos / 1_000_000_000.0;
                     
@@ -1103,8 +1105,12 @@ public class OthelloGUI extends JFrame {
                         nps = Math.round(checked / elapsedSeconds);
                     }
                     
-                    aiInfoLabel.setText(String.format("Evaluated %,d states (%,d evals) at depth %d in %.3fs (%,d/sec)", 
-                            checked, evals, aiDepth, elapsedSeconds, nps));
+                    boolean ab = alphaBetaCheckbox.isSelected();
+                    boolean mo = moveOrderingCheckbox.isSelected();
+                    String settingsStr = String.format("[Alpha-Beta: %s, Move Ordering: %s]", ab ? "ON" : "OFF", mo ? "ON" : "OFF");
+
+                    aiInfoLabel.setText(String.format("Evaluated %,d states at depth %d in %.3fs (%,d/sec) %s", 
+                            checked, aiDepth, elapsedSeconds, nps, settingsStr));
 
                     if (bestMoveIndex != -1) {
                         int r = bestMoveIndex / 8;
@@ -1253,7 +1259,8 @@ public class OthelloGUI extends JFrame {
         int fontSize = 9;
         if (text.equals("Valid") || text.equals("Invalid") || text.equals("Evaluating") || 
             text.equals("End of board") || text.equals("Empty") || 
-            text.equals("Own Piece") || text.equals("Skip") || text.equals("Opponent")) {
+            text.equals("Own Piece") || text.equals("Skip") || text.equals("Opponent") || 
+            text.equals("Already checked")) {
             fontSize = 14; 
         }
 
@@ -1268,7 +1275,7 @@ public class OthelloGUI extends JFrame {
         
         int startY = cellY + ((cellHeight - totalHeight) / 2) + fm.getAscent() - 13;
         
-        if (text.equals("Skip")) {
+        if (text.equals("Skip") || text.equals("Already checked")) {
             startY += 3; 
         }
 
@@ -1276,7 +1283,7 @@ public class OthelloGUI extends JFrame {
             String line = lines[i];
             int startX = cellX + (cellWidth - fm.stringWidth(line)) / 2;
             
-            if (text.equals("Skip")) {
+            if (text.equals("Skip") || text.equals("Already checked")) {
                 startX += 3; 
             }
             
@@ -1297,7 +1304,7 @@ public class OthelloGUI extends JFrame {
                 g2.setColor(new Color(255, 215, 0)); 
             } else if (text.equals("Empty") && highlight == 1) {
                 g2.setColor(new Color(255, 215, 0)); 
-            } else if (text.equals("Skip")) {
+            } else if (text.equals("Skip") || text.equals("Already checked")) {
                 g2.setColor(new Color(160, 32, 240)); 
             } else if (text.equals("Invalid") || text.equals("End of board") || text.equals("Empty") || text.equals("Own Piece") || text.equals("Opponent")) {
                 g2.setColor(new Color(255, 50, 50)); 
@@ -1963,11 +1970,11 @@ public class OthelloGUI extends JFrame {
                             curHighlights[r][c] = 3;
 
                             int tempR = termMinusR;
-                            int tempC = termMinusC;
-                            while (tempR != termPlusR || tempC != termPlusC) {
-                                successArrows.add(new int[]{tempR, tempC, tempR + dr, tempC + dc, 3}); 
+                            int tempC_real = termMinusC;
+                            while (tempR != termPlusR || tempC_real != termPlusC) {
+                                successArrows.add(new int[]{tempR, tempC_real, tempR + dr, tempC_real + dc, 3}); 
                                 tempR += dr;
-                                tempC += dc;
+                                tempC_real += dc;
                             }
 
                             successTexts[termMinusR][termMinusC] = "Valid";
@@ -2891,7 +2898,7 @@ public class OthelloGUI extends JFrame {
                         
                         applyTransientOverlay(curHighlights, state.markers, state.tileTexts, 
                                               currentSpaceInvalids, currentSpaceFailedOpponents,
-                                              currentSquareMarkers, currentSquareTexts,
+                                                  currentSquareMarkers, currentSquareTexts,
                                               evaluated, persistentValids, persistentInvalids);
                         
                         state.tileTexts[r][c] = "Evaluating"; 
@@ -3483,6 +3490,14 @@ public class OthelloGUI extends JFrame {
 
                     depthSlider.setEnabled(true);
                     bitboardRadio.setEnabled(true);
+                    ooRadio.setSelected(true); // reset back to flat array as baseline or similar depending on final state
+                    bitboardRadio.setSelected(selectedEngine == EngineType.BITBOARD);
+                    ooRadio.setSelected(selectedEngine == EngineType.FLAT_ARRAY);
+                    primitive2dRadio.setSelected(selectedEngine == EngineType.PRIMITIVE_2D);
+                    nestedRadio.setSelected(selectedEngine == EngineType.NESTED_OBJECT);
+
+                    depthSlider.setEnabled(true);
+                    bitboardRadio.setEnabled(true);
                     ooRadio.setEnabled(true);
                     primitive2dRadio.setEnabled(true);
                     nestedRadio.setEnabled(true);
@@ -3628,7 +3643,6 @@ public class OthelloGUI extends JFrame {
             java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(1);
             final int[] foundMoveIdx = new int[1];
             final long[] searchedStates = new long[1];
-            final long[] searchEvals = new long[1];
             final double[] searchTimeSec = new double[1];
 
             SwingUtilities.invokeLater(() -> {
@@ -3639,14 +3653,14 @@ public class OthelloGUI extends JFrame {
                 aiStartTime = System.nanoTime();
                 aiProgressTimer = new Timer(50, ev -> {
                     long checked = game.getEvaluatedNodes();
-                    long evals = game.getEvaluationCount();
                     long elapsedNanos = System.nanoTime() - aiStartTime;
                     double elapsedSeconds = elapsedNanos / 1_000_000_000.0;
                     long nps = 0;
                     if (elapsedNanos > 1_000_000) { 
                         nps = Math.round(checked / elapsedSeconds);
                     }
-                    aiInfoLabel.setText(String.format("[%s] %,d states, %,d evals (%,d/sec)", testName, checked, evals, nps));
+                    String settingsStr = String.format("[Alpha-Beta: %s, Move Ordering: %s]", abActive ? "ON" : "OFF", moActive ? "ON" : "OFF");
+                    aiInfoLabel.setText(String.format("[%s] %,d states in %.2fs (%,d/sec) %s", testName, checked, elapsedSeconds, nps, settingsStr));
                 });
                 aiProgressTimer.start();
 
@@ -3670,7 +3684,6 @@ public class OthelloGUI extends JFrame {
                         try {
                             foundMoveIdx[0] = get();
                             searchedStates[0] = game.getEvaluatedNodes();
-                            searchEvals[0] = game.getEvaluationCount();
                         } catch (Exception e) {
                             foundMoveIdx[0] = -1;
                         }
@@ -3689,7 +3702,6 @@ public class OthelloGUI extends JFrame {
             }
 
             long states = searchedStates[0];
-            long evals = searchEvals[0];
             double durationSec = searchTimeSec[0];
             finalTimeSec = durationSec;
             int bestMoveIdx = foundMoveIdx[0];
@@ -3705,26 +3717,28 @@ public class OthelloGUI extends JFrame {
                 expectedMoves[depth] = bestMoveAlg; 
             }
 
+            String settingsStr = String.format("[Alpha-Beta: %s, Move Ordering: %s]", abActive ? "ON" : "OFF", moActive ? "ON" : "OFF");
+
             consoleResultStr = String.format(
                 "Test: %s\n" +
                 " -> States searched: %,d\n" +
-                " -> Heuristic evals: %,d\n" +
+                " -> Settings: %s\n" +
                 " -> Time taken: %.4f seconds\n" +
                 " -> Throughput: %,d states/sec\n" +
                 " -> Move found: %s\n\n",
-                testName, states, evals, durationSec, nps, bestMoveAlg
+                testName, states, settingsStr, durationSec, nps, bestMoveAlg
             );
 
             String htmlResult = String.format(
                 "<div style='margin-bottom: 10px; font-family: monospace; font-size: 11px;'>" +
                 " <span style='color: %s; font-weight: bold;'>&bull; %s</span><br>" +
                 " &nbsp; &rarr; States searched: <b>%,d</b><br>" +
-                " &nbsp; &rarr; Heuristic evals: <b>%,d</b><br>" +
+                " &nbsp; &rarr; Settings: <b>%s</b><br>" +
                 " &nbsp; &rarr; Time taken: <b>%.4f</b> seconds<br>" +
                 " &nbsp; &rarr; Throughput: <b>%,d</b> states/sec<br>" +
                 " &nbsp; &rarr; Move found: <b>%s</b>" +
                 "</div>",
-                colorHex, testName, states, evals, durationSec, nps, bestMoveAlg
+                colorHex, testName, states, settingsStr, durationSec, nps, bestMoveAlg
             );
             
             summary.append(htmlResult);
@@ -3890,7 +3904,7 @@ public class OthelloGUI extends JFrame {
         // LAYER 2: Draw all vector outcome markers
         for (int r = 0; r < 8; r++) {
             for (int c = 0; c < 8; c++) {
-                String marker = state.markers[r][c];
+                String marker = state.markers[r][c]; // Keep original col/c array check safely aligned
                 if (marker != null) {
                     int cx = c * w + w / 2;
                     int cy = r * h + h / 2;
