@@ -127,22 +127,89 @@ public class OthelloFlatArray implements OthelloBoard {
     public List<int[]> getValidMoves(int player) {
         List<int[]> moves = new ArrayList<>();
         int opponent = (player == BLACK) ? WHITE : BLACK;
-        long visited = 0L;
+
+        long processed0 = 0L;
+        long processed1 = 0L;
+        long processed2 = 0L;
+        long processed3 = 0L;
+        long added = 0L;
+
+        int[] drAxes = {0, 1, 1, 1};
+        int[] dcAxes = {1, 0, 1, -1};
 
         for (int i = 0; i < 64; i++) {
             if (board[i] == opponent) {
                 int r = i / 8;
                 int c = i % 8;
-                for (int d = 0; d < 8; d++) {
-                    int nr = r + DR[d];
-                    int nc = c + DC[d];
-                    if (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) {
-                        int ni = nr * 8 + nc;
-                        long bit = 1L << ni;
-                        if (board[ni] == EMPTY && (visited & bit) == 0) {
-                            visited |= bit;
-                            if (isValidMove(nr, nc, player)) {
-                                moves.add(new int[]{nr, nc});
+
+                for (int axis = 0; axis < 4; axis++) {
+                    long axisBit = 1L << i;
+                    boolean isProcessed = false;
+                    if (axis == 0) isProcessed = (processed0 & axisBit) != 0;
+                    else if (axis == 1) isProcessed = (processed1 & axisBit) != 0;
+                    else if (axis == 2) isProcessed = (processed2 & axisBit) != 0;
+                    else if (axis == 3) isProcessed = (processed3 & axisBit) != 0;
+
+                    if (isProcessed) {
+                        continue;
+                    }
+
+                    int dr = drAxes[axis];
+                    int dc = dcAxes[axis];
+
+                    // Scan in the positive direction of the axis
+                    int currR = r + dr;
+                    int currC = c + dc;
+                    while (currR >= 0 && currR < 8 && currC >= 0 && currC < 8 && board[currR * 8 + currC] == opponent) {
+                        currR += dr;
+                        currC += dc;
+                    }
+                    int termPlusR = currR;
+                    int termPlusC = currC;
+                    boolean termPlusOnBoard = (termPlusR >= 0 && termPlusR < 8 && termPlusC >= 0 && termPlusC < 8);
+
+                    // Scan in the negative direction of the axis
+                    currR = r - dr;
+                    currC = c - dc;
+                    while (currR >= 0 && currR < 8 && currC >= 0 && currC < 8 && board[currR * 8 + currC] == opponent) {
+                        currR -= dr;
+                        currC -= dc;
+                    }
+                    int termMinusR = currR;
+                    int termMinusC = currC;
+                    boolean termMinusOnBoard = (termMinusR >= 0 && termMinusR < 8 && termMinusC >= 0 && termMinusC < 8);
+
+                    // Mark entire sequence along this axis as processed to avoid redundant scans
+                    int markR = termMinusR + dr;
+                    int markC = termMinusC + dc;
+                    while (markR != termPlusR || markC != termPlusC) {
+                        int markIdx = markR * 8 + markC;
+                        long markBit = 1L << markIdx;
+                        if (axis == 0) processed0 |= markBit;
+                        else if (axis == 1) processed1 |= markBit;
+                        else if (axis == 2) processed2 |= markBit;
+                        else if (axis == 3) processed3 |= markBit;
+                        markR += dr;
+                        markC += dc;
+                    }
+
+                    // Evaluate if the segment is bordered by EMPTY on one end and PLAYER on the other
+                    if (termPlusOnBoard && termMinusOnBoard) {
+                        int plusIdx = termPlusR * 8 + termPlusC;
+                        int minusIdx = termMinusR * 8 + termMinusC;
+
+                        if (board[plusIdx] == EMPTY && board[minusIdx] == player) {
+                            long plusBit = 1L << plusIdx;
+                            if ((added & plusBit) == 0) {
+                                added |= plusBit;
+                                moves.add(new int[]{termPlusR, termPlusC});
+                            }
+                        }
+                        if (board[minusIdx] == EMPTY && board[plusIdx] == player) {
+                            long minusBit = 1L << minusIdx;
+                            if ((added & minusBit) == 0) {
+                                added |= minusBit;
+                                moves.add(new int[]{termMinusR, termMinusC});
                             }
                         }
                     }
@@ -155,24 +222,93 @@ public class OthelloFlatArray implements OthelloBoard {
     private void generateMoves1D(int player, int ply) {
         int count = 0;
         int opponent = (player == BLACK) ? WHITE : BLACK;
-        long visited = 0L;
         int base = ply * 64;
+
+        long processed0 = 0L;
+        long processed1 = 0L;
+        long processed2 = 0L;
+        long processed3 = 0L;
+        long added = 0L;
+
+        int[] drAxes = {0, 1, 1, 1};
+        int[] dcAxes = {1, 0, 1, -1};
 
         for (int i = 0; i < 64; i++) {
             if (board[i] == opponent) {
                 int r = i / 8;
                 int c = i % 8;
-                for (int d = 0; d < 8; d++) {
-                    int nr = r + DR[d];
-                    int nc = c + DC[d];
-                    if (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) {
-                        int ni = nr * 8 + nc;
-                        long bit = 1L << ni;
-                        if (board[ni] == EMPTY && (visited & bit) == 0) {
-                            visited |= bit;
-                            if (isValidMove(nr, nc, player)) {
-                                moveStackR[base + count] = nr;
-                                moveStackC[base + count] = nc;
+
+                for (int axis = 0; axis < 4; axis++) {
+                    long axisBit = 1L << i;
+                    boolean isProcessed = false;
+                    if (axis == 0) isProcessed = (processed0 & axisBit) != 0;
+                    else if (axis == 1) isProcessed = (processed1 & axisBit) != 0;
+                    else if (axis == 2) isProcessed = (processed2 & axisBit) != 0;
+                    else if (axis == 3) isProcessed = (processed3 & axisBit) != 0;
+
+                    if (isProcessed) {
+                        continue;
+                    }
+
+                    int dr = drAxes[axis];
+                    int dc = dcAxes[axis];
+
+                    // Scan positive direction
+                    int currR = r + dr;
+                    int currC = c + dc;
+                    while (currR >= 0 && currR < 8 && currC >= 0 && currC < 8 && board[currR * 8 + currC] == opponent) {
+                        currR += dr;
+                        currC += dc;
+                    }
+                    int termPlusR = currR;
+                    int termPlusC = currC;
+                    boolean termPlusOnBoard = (termPlusR >= 0 && termPlusR < 8 && termPlusC >= 0 && termPlusC < 8);
+
+                    // Scan negative direction
+                    currR = r - dr;
+                    currC = c - dc;
+                    while (currR >= 0 && currR < 8 && currC >= 0 && currC < 8 && board[currR * 8 + currC] == opponent) {
+                        currR -= dr;
+                        currC -= dc;
+                    }
+                    int termMinusR = currR;
+                    int termMinusC = currC;
+                    boolean termMinusOnBoard = (termMinusR >= 0 && termMinusR < 8 && termMinusC >= 0 && termMinusC < 8);
+
+                    // Mark segment as processed
+                    int markR = termMinusR + dr;
+                    int markC = termMinusC + dc;
+                    while (markR != termPlusR || markC != termPlusC) {
+                        int markIdx = markR * 8 + markC;
+                        long markBit = 1L << markIdx;
+                        if (axis == 0) processed0 |= markBit;
+                        else if (axis == 1) processed1 |= markBit;
+                        else if (axis == 2) processed2 |= markBit;
+                        else if (axis == 3) processed3 |= markBit;
+                        markR += dr;
+                        markC += dc;
+                    }
+
+                    // Evaluate endpoints
+                    if (termPlusOnBoard && termMinusOnBoard) {
+                        int plusIdx = termPlusR * 8 + termPlusC;
+                        int minusIdx = termMinusR * 8 + termMinusC;
+
+                        if (board[plusIdx] == EMPTY && board[minusIdx] == player) {
+                            long plusBit = 1L << plusIdx;
+                            if ((added & plusBit) == 0) {
+                                added |= plusBit;
+                                moveStackR[base + count] = termPlusR;
+                                moveStackC[base + count] = termPlusC;
+                                count++;
+                            }
+                        }
+                        if (board[minusIdx] == EMPTY && board[plusIdx] == player) {
+                            long minusBit = 1L << minusIdx;
+                            if ((added & minusBit) == 0) {
+                                added |= minusBit;
+                                moveStackR[base + count] = termMinusR;
+                                moveStackC[base + count] = termMinusC;
                                 count++;
                             }
                         }
@@ -258,21 +394,81 @@ public class OthelloFlatArray implements OthelloBoard {
 
     private boolean hasValidMoves(int player) {
         int opponent = (player == BLACK) ? WHITE : BLACK;
-        long visited = 0L;
+
+        long processed0 = 0L;
+        long processed1 = 0L;
+        long processed2 = 0L;
+        long processed3 = 0L;
+
+        int[] drAxes = {0, 1, 1, 1};
+        int[] dcAxes = {1, 0, 1, -1};
 
         for (int i = 0; i < 64; i++) {
             if (board[i] == opponent) {
                 int r = i / 8;
                 int c = i % 8;
-                for (int d = 0; d < 8; d++) {
-                    int nr = r + DR[d];
-                    int nc = c + DC[d];
-                    if (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) {
-                        int ni = nr * 8 + nc;
-                        long bit = 1L << ni;
-                        if (board[ni] == EMPTY && (visited & bit) == 0) {
-                            visited |= bit;
-                            if (isValidMove(nr, nc, player)) return true;
+
+                for (int axis = 0; axis < 4; axis++) {
+                    long axisBit = 1L << i;
+                    boolean isProcessed = false;
+                    if (axis == 0) isProcessed = (processed0 & axisBit) != 0;
+                    else if (axis == 1) isProcessed = (processed1 & axisBit) != 0;
+                    else if (axis == 2) isProcessed = (processed2 & axisBit) != 0;
+                    else if (axis == 3) isProcessed = (processed3 & axisBit) != 0;
+
+                    if (isProcessed) {
+                        continue;
+                    }
+
+                    int dr = drAxes[axis];
+                    int dc = dcAxes[axis];
+
+                    // Scan positive direction
+                    int currR = r + dr;
+                    int currC = c + dc;
+                    while (currR >= 0 && currR < 8 && currC >= 0 && currC < 8 && board[currR * 8 + currC] == opponent) {
+                        currR += dr;
+                        currC += dc;
+                    }
+                    int termPlusR = currR;
+                    int termPlusC = currC;
+                    boolean termPlusOnBoard = (termPlusR >= 0 && termPlusR < 8 && termPlusC >= 0 && termPlusC < 8);
+
+                    // Scan negative direction
+                    currR = r - dr;
+                    currC = c - dc;
+                    while (currR >= 0 && currR < 8 && currC >= 0 && currC < 8 && board[currR * 8 + currC] == opponent) {
+                        currR -= dr;
+                        currC -= dc;
+                    }
+                    int termMinusR = currR;
+                    int termMinusC = currC;
+                    boolean termMinusOnBoard = (termMinusR >= 0 && termMinusR < 8 && termMinusC >= 0 && termMinusC < 8);
+
+                    // Mark segment as processed
+                    int markR = termMinusR + dr;
+                    int markC = termMinusC + dc;
+                    while (markR != termPlusR || markC != termPlusC) {
+                        int markIdx = markR * 8 + markC;
+                        long markBit = 1L << markIdx;
+                        if (axis == 0) processed0 |= markBit;
+                        else if (axis == 1) processed1 |= markBit;
+                        else if (axis == 2) processed2 |= markBit;
+                        else if (axis == 3) processed3 |= markBit;
+                        markR += dr;
+                        markC += dc;
+                    }
+
+                    // Evaluate endpoints
+                    if (termPlusOnBoard && termMinusOnBoard) {
+                        int plusIdx = termPlusR * 8 + termPlusC;
+                        int minusIdx = termMinusR * 8 + termMinusC;
+
+                        if (board[plusIdx] == EMPTY && board[minusIdx] == player) {
+                            return true;
+                        }
+                        if (board[minusIdx] == EMPTY && board[plusIdx] == player) {
+                            return true;
                         }
                     }
                 }
