@@ -1,3 +1,5 @@
+package src.engine;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -35,9 +37,6 @@ public class OthelloFlatArray implements OthelloBoard {
     private final int[] moveStackR = new int[64 * 64];
     private final int[] moveStackC = new int[64 * 64];
     private final int[] moveCountStack = new int[64];
-
-    private final boolean[][][] processedStack = new boolean[64][64][4];
-    private final boolean[][] addedStack = new boolean[64][64];
 
     public OthelloFlatArray() {
         this.nodeCounter = new NodeCounter();

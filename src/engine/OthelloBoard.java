@@ -1,3 +1,5 @@
+package src.engine;
+
 import java.util.List;
 
 public interface OthelloBoard {
@@ -15,5 +17,5 @@ public interface OthelloBoard {
     long estimateMaxNodes(int player, int depth);
     void setPieceAt(int r, int c, int piece);
     void setUseAlphaBeta(boolean useAlphaBeta);
-    void setUseMoveOrdering(boolean useMoveOrdering); // NEW: Toggle signature
+    void setUseMoveOrdering(boolean useMoveOrdering);
 }
